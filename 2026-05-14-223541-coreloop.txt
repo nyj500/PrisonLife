@@ -1,0 +1,3040 @@
+╭─── Claude Code v2.1.141 ─────────────────────────────────────────────────────╮
+│                                                    │ Tips for getting        │
+│                 Welcome back 예진!                 │ started                 │
+│                                                    │ Run /init to create a … │
+│                      ▗ ▗   ▖ ▖                     │ ─────────────────────── │
+│                                                    │ What's new              │
+│                        ▘▘ ▝▝                       │ Added `terminalSequenc… │
+│  Sonnet 4.6 · Claude Pro · nayejin500@gmail.com's  │ Added `CLAUDE_CODE_PLU… │
+│  Organization                                      │ Added `ANTHROPIC_WORKS… │
+│                 ~/Unity/PrisonLife                 │ /release-notes for more │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+❯ 먼저 CoreLoop를 만들어줘.                                                     
+
+⏺ 프로젝트 구조를 먼저 파악하겠습니다.
+
+  Searched for 1 pattern, listed 1 directory (ctrl+o to expand)
+
+❯ # Prison Life - Mobile Idle Game (Unity 3D)                                                                  
+                                                                                                               
+  ## 프로젝트 개요                                                                                             
+  모바일 광고 영상에서 보여지는 "Prison Life" 게임을 Unity로 제작합니다.                                       
+  제출 기한: 2026년 5월 19일 23:59                                                                             
+                                                                                                               
+  ## 기술 스택                                                                                                 
+  - Unity 6 (URP)                                                                                              
+  - C#                                                                                                         
+  - 타겟 플랫폼: Android/iOS (모바일 세로 화면)                                                                
+  - 렌더링: 탑다운 쿼터뷰 (Isometric-style 카메라, 약 45도 각도)                                               
+                                                                                                               
+  ---                                                                                                          
+                                                                                                               
+  ## 씬 구성                                                                                                   
+                                                                                                               
+  ### 카메라                                                                                                   
+  - Isometric 쿼터뷰 고정 카메라 (플레이어 추적)                                                               
+  - 카메라는 플레이어를 중심으로 부드럽게 Follow                                                               
+                                                                                                               
+  ### 맵 레이아웃 (Zone 배치)                                                                                  
+  다음 Zone들이 맵에 배치됩니다:                                                                               
+                                                                                                               
+  1. **MineZone** - 광석이 배치된 채굴장 (모래/자갈 바닥 텍스처)                                               
+  2. **ManufacturingZone** - 제조기 (컨베이어벨트 포함 기계)                                                   
+  3. **HandcuffStackZone** - 완성된 수갑이 쌓이는 구역                                                         
+  4. **DeskZone** - 수감자 처리 데스크                                                                         
+  5. **MoneyStackZone** - 돈이 쌓이는 구역                                                                     
+  6. **UpgradeZone_Tool** - 채굴 도구 업그레이드                                                               
+  7. **UpgradeZone_Worker** - 인부 고용 업그레이드                                                             
+  8. **UpgradeZone_Desk** - 데스크 직원 고용 업그레이드                                                        
+                                                                                                               
+  ---                                                                                                          
+                                                                                                               
+  ## 플레이어 시스템                                                                                           
+                                                                                                               
+  ### 이동                                                                                                     
+  - 화면 하단 고정 Virtual Joystick (터치 드래그)                                                              
+  - Rigidbody 기반 이동, 이동 방향으로 캐릭터 회전                                                             
+  - 이동 속도: 기본 5f                                                                                         
+                                                                                                               
+  ### 소지 아이템 (등 뒤 스택)                                                                                 
+  플레이어 등 뒤에 오브젝트가 쌓임:                                                                            
+  - **광석(Ore)** 이 먼저 쌓이고, 그 위에 **돈(Money)** 이 쌓임                                                
+  - 광석을 소비하면 빈 공간 없이 돈이 플레이어 등 뒤로 즉시 재정렬됨                                           
+  - 소지 가능 최대 광석: 20개 (업그레이드로 증가 가능)                                                         
+  - 소지 가능 최대 돈: 제한 없음                                                                               
+  - 스택 오브젝트들은 등 뒤에서 아래→위 방향으로 쌓이며, 살짝 튀어오르는 애니메이션 적용 (DOTween 또는 코루틴) 
+                                                                                                               
+  ---                                                                                                          
+                                                                                                               
+  ## Zone별 동작                                                                                               
+                                                                                                               
+  ### 1. MineZone (채굴장)                                                                                     
+  - Zone 진입 시 채굴 모드 자동 시작                                                                           
+  - **채굴 사이클:**                                                                                           
+    1. 플레이어가 가장 가까운 광석 오브젝트 방향으로 이동                                                      
+    2. 곡괭이 내려치기 애니메이션 1회 재생                                                                     
+    3. 애니메이션 종료 시점: 광석 오브젝트 Destroy + 플레이어 등에 광석 1개 추가                               
+    4. 소지 최대치 도달 시 채굴 중단                                                                           
+  - Zone 이탈 시 채굴 중단, 일반 이동으로 복귀                                                                 
+  - 광석 오브젝트: 검은 바위 형태 (Sphere/Capsule + 어두운 회색 Material)                                      
+  - 채굴된 광석은 일정 시간 후 Respawn                                                                         
+                                                                                                               
+  ### 2. ManufacturingZone (제조기)                                                                            
+  - Zone 진입 시 등 뒤 광석을 1개씩 내려놓는 애니메이션 시작                                                   
+  - 내려놓는 간격: 0.5초/개                                                                                    
+  - 컨베이어 벨트 애니메이션 (UV Scroll 또는 오브젝트 이동)                                                    
+  - 제조 완료된 광석은 HandcuffStackZone으로 이동 (이동 애니메이션)                                            
+  - 플레이어가 Zone을 이탈해도 남은 광석 제조는 계속 진행                                                      
+                                                                                                               
+  ### 3. HandcuffStackZone (수갑 보관 구역)                                                                    
+  - 제조기에서 완성된 수갑이 여기에 쌓임                                                                       
+  - 플레이어가 Zone 진입 시 쌓인 수갑을 자동으로 수령 (등 뒤에 추가)                                           
+  - 수갑은 작은 은색 수갑 모형으로 표시                                                                        
+                                                                                                               
+  ### 4. DeskZone (수감자 처리 데스크)                                                                         
+  - 데스크 앞에 수감자 NPC들이 대기 줄을 형성                                                                  
+  - 수감자마다 필요 수갑 수: 2~4개 (랜덤 또는 고정)                                                            
+  - 수감자 머리 위에 필요 수갑 개수를 아이콘으로 표시                                                          
+  - 플레이어가 Zone 진입 + 수갑 보유량 >= 필요량:                                                              
+    - 수갑 자동 소비 (0.3초 간격으로 1개씩)                                                                    
+    - 수감자 NPC가 감옥 방향으로 걸어서 이동 후 사라짐                                                         
+    - 돈 오브젝트가 MoneyStackZone에 생성됨                                                                    
+    - 다음 줄의 수감자가 데스크 앞으로 이동                                                                    
+  - 수감자 복장: 오렌지색 죄수복 (Capsule + Material)                                                          
+                                                                                                               
+  ### 5. MoneyStackZone (돈 보관 구역)                                                                         
+  - 수감자 처리 시 돈 오브젝트가 이 구역에 쌓임                                                                
+  - 플레이어가 Zone 진입 시 돈을 자동 수령 (등 뒤 광석 위에 쌓임)                                              
+  - UI 상단의 돈 카운터는 MoneyStackZone 수령 시가 아닌, **DeskZone에서 수감자 처리 완료 시** 증가             
+                                                                                                               
+  ### 6. UpgradeZone_Tool (채굴 도구 업그레이드)                                                               
+  - Lv1 → Lv2: 비용 20원                                                                                       
+    - 도구 변경: 곡괭이 → 드릴                                                                                 
+    - 채굴 속도 1.5배, 한 번에 2개 채굴                                                                        
+    - 최대 소지 광석: 10개 → 20개                                                                              
+                                                                                                               
+  - Lv2 → Lv3: 비용 50원                                                                                       
+    - 도구 변경: 드릴 → 폭파 장치                                                                              
+    - 채굴 속도 2배, 한 번에 4개 채굴                                                                          
+    - 최대 소지 광석: 20개 → 30개                                                                              
+  - 최대 소지 광석은 추후 수정 가능하도록 상수로 분리                                                          
+                                                                                                               
+  ### 7. UpgradeZone_Worker (인부 고용)                                                                        
+  - 비용 소비 시 채굴장에 Worker NPC 3명 스폰                                                                  
+  - Worker AI:                                                                                                 
+    1. 가장 가까운 광석으로 이동                                                                               
+    2. 채굴 애니메이션 재생 → 광석 제거                                                                        
+    3. 소지 광석이 일정량(5개) 이상이면 ManufacturingZone으로 이동                                             
+    4. ManufacturingZone 도착 시 광석 자동 납품 → 다시 채굴 반복                                               
+  - Worker는 플레이어와 독립적으로 동작                                                                        
+                                                                                                               
+  ### 8. UpgradeZone_Desk (데스크 직원 고용)                                                                   
+  - 비용: 50원 (1회)                                                                                           
+  - 업그레이드 시 DeskWorker NPC 1명 스폰                                                                      
+  - DeskWorker AI:                                                                                             
+    1. HandcuffStackZone으로 이동                                                                              
+    2. 수갑이 쌓여 있으면 수갑을 집어 등에 올림 (최대 소지량 내)                                               
+    3. DeskZone으로 이동 → 수갑을 자동으로 내려놓음                                                            
+    4. 수감자 처리는 플레이어와 동일한 로직으로 자동 진행                                                      
+    5. 다시 HandcuffStackZone으로 반복 이동                                                                    
+  - DeskWorker가 활성화되어 있어도 플레이어도 DeskZone에서 수동 처리 가능                                      
+  - DeskWorker 복장: 파란색 경찰복 (플레이어와 동일 계열)                                                      
+                                                                                                               
+  ---                                                                                                          
+                                                                                                               
+  ## UI 구성                                                                                                   
+                                                                                                               
+  ### HUD                                                                                                      
+  - **상단 우측**: 돈 아이콘 + 보유 금액 (TextMeshPro, 흰색 텍스트 + 초록 달러 아이콘)                         
+  - **하단 좌측**: 사운드 토글 버튼                                                                            
+  - **하단 중앙**: Virtual Joystick                                                                            
+                                                                                                               
+  ### Zone UI                                                                                                  
+  - 각 Zone 바닥에 점선 사각형 표시 (흰색 점선 Decal 또는 LineRenderer)                                        
+  - Zone 위에 액션 아이콘 표시 (곡괭이, 기어, 수갑, 달러 등)                                                   
+  - 업그레이드 Zone: 현재 레벨 / 비용 텍스트 표시                                                              
+                                                                                                               
+  ---                                                                                                          
+                                                                                                               
+  ## 아트 스타일                                                                                               
+  - Low-poly 3D, 밝고 채도 높은 컬러                                                                           
+  - 캐릭터: Capsule 기반 심플 캐릭터 (머리 Sphere + 몸 Capsule)                                                
+    - 플레이어: 파란색 경찰복                                                                                  
+    - 수감자: 오렌지색 줄무늬 죄수복 + 흰검 줄무늬 모자                                                        
+    - Worker NPC: 파란색 작업복                                                                                
+  - 건물/기계: Unity Primitive + 색상 Material로 구현                                                          
+  - 바닥: 두 가지 텍스처 (실내 회색 타일 / 채굴장 모래+자갈)                                                   
+                                                                                                               
+  ---                                                                                                          
+                                                                                                               
+  ## 폴더 구조                                                                                                 
+  Assets/                                                                                                      
+  ├── Scripts/                                                                                                 
+  │   ├── Player/                                                                                              
+  │   │   ├── PlayerController.cs                                                                              
+  │   │   ├── PlayerInventory.cs                                                                               
+  │   │   └── PlayerAnimator.cs                                                                                
+  │   ├── Zones/                                                                                               
+  │   │   ├── BaseZone.cs                                                                                      
+  │   │   ├── MineZone.cs                                                                                      
+  │   │   ├── ManufacturingZone.cs                                                                             
+  │   │   ├── HandcuffStackZone.cs                                                                             
+  │   │   ├── DeskZone.cs                                                                                      
+  │   │   ├── MoneyStackZone.cs                                                                                
+  │   │   └── UpgradeZone.cs                                                                                   
+  │   ├── NPC/                                                                                                 
+  │   │   ├── PrisonerNPC.cs                                                                                   
+  │   │   ├── WorkerNPC.cs                                                                                     
+  │   │   └── DeskWorkerNPC.cs                                                                                 
+  │   ├── Items/                                                                                               
+  │   │   ├── OreItem.cs                                                                                       
+  │   │   ├── HandcuffItem.cs                                                                                  
+  │   │   └── MoneyItem.cs                                                                                     
+  │   ├── UI/                                                                                                  
+  │   │   ├── VirtualJoystick.cs                                                                               
+  │   │   ├── HUDManager.cs                                                                                    
+  │   │   └── ZoneUI.cs                                                                                        
+  │   └── Managers/                                                                                            
+  │       ├── GameManager.cs                                                                                   
+  │       └── UpgradeManager.cs                                                                                
+  ├── Prefabs/                                                                                                 
+  ├── Materials/                                                                                               
+  ├── Scenes/                                                                                                  
+  │   └── GameScene.unity                                                                                      
+  └── Settings/                                                                                                
+                                                                                                               
+  ---                                                                                                          
+                                                                                                               
+  ## 구현 우선순위 (작업 순서)                                                                                 
+                                                                                                               
+  1. **[필수] Core Loop**                                                                                      
+     - 플레이어 이동 (Virtual Joystick)                                                                        
+     - MineZone 채굴 → 등에 광석 쌓기                                                                          
+     - ManufacturingZone → 수갑 생성                                                                           
+     - HandcuffStackZone → 수갑 수령                                                                           
+     - DeskZone → 수감자 처리 → 돈 획득                                                                        
+     - UI 돈 카운터                                                                                            
+                                                                                                               
+  2. **[필수] 스택 시스템**                                                                                    
+     - 등 뒤 오브젝트 정렬 및 재정렬                                                                           
+     - 광석 → 수갑 전환 시 스택 업데이트                                                                       
+                                                                                                               
+  3. **[중요] 업그레이드 시스템**                                                                              
+     - 채굴 도구 업그레이드                                                                                    
+     - Worker NPC 고용 및 AI                                                                                   
+                                                                                                               
+  4. **[선택] 폴리싱**                                                                                         
+     - 수감자 대기열 애니메이션                                                                                
+     - 파티클 이펙트 (채굴 시 먼지, 수갑 완성 시 반짝임)                                                       
+     - 사운드 효과                                                                                             
+                                                                                                               
+  ---                                                                                                          
+                                                                                                               
+  ## 주의사항                                                                                                  
+  - 모든 Zone은 OnTriggerEnter/Exit 기반으로 구현                                                              
+  - 스택 오브젝트 위치는 매 프레임 플레이어 등 뒤 좌표로 업데이트                                              
+  - Worker NPC는 NavMesh 또는 직접 이동 벡터 계산으로 구현                                                     
+  - 모바일 퍼포먼스: 오브젝트 풀링 적용 (광석 Respawn, 돈 오브젝트)                                            
+  - 카메라는 플레이어 Y축 고정, X/Z만 추적                                                                     
+
+⏺ GDD를 확인했습니다. CoreLoop에 필요한 모든 스크립트를 작성하겠습니다.
+
+⏺ Bash(mkdir -p /Users/nyj500/Unity/PrisonLife/Assets/Scripts/{Managers,Player,Z
+      ones,NPC,Items,UI,Utils})
+  ⎿  Done
+
+⏺ Write(Assets/Scripts/Managers/GameManager.cs)
+  ⎿  Wrote 31 lines to Assets/Scripts/Managers/GameManager.cs
+      1 using UnityEngine;
+      2 using System;
+      3 
+      4 public class GameManager : MonoBehaviour
+      5 {
+      6     public static GameManager Instance { get; private set; }
+      7 
+      8     public int Money { get; private set; }
+      9     public event Action<int> OnMoneyChanged;
+     … +22 lines (ctrl+o to expand)
+
+⏺ Write(Assets/Scripts/Managers/UpgradeManager.cs)
+  ⎿  Wrote 52 lines to Assets/Scripts/Managers/UpgradeManager.cs
+      1 using UnityEngine;
+      2 
+      3 public class UpgradeManager : MonoBehaviour
+      4 {
+      5     public static UpgradeManager Instance { get; private set; }
+      6 
+      7     public int ToolLevel { get; private set; } = 1;
+      8     public bool HasWorker { get; private set; }
+      9     public bool HasDeskWorker { get; private set; }
+     … +47 lines (ctrl+o to expand)
+
+⏺ Write(Assets/Scripts/Utils/ObjectPool.cs)
+  ⎿  Wrote 40 lines to Assets/Scripts/Utils/ObjectPool.cs
+       2 using System.Collections.Generic;
+       3 
+       4 public class ObjectPool<T> where T : MonoBehaviour
+       5 {
+       6     readonly T prefab;
+       7     readonly Transform parent;
+       8     readonly Queue<T> pool = new Queue<T>();
+       9 
+      10     public ObjectPool(T prefab, int initialSize, Transform paren
+         t = null)
+     … +31 lines (ctrl+o to expand)
+
+⏺ Write(Assets/Scripts/UI/VirtualJoystick.cs)
+  ⎿  Wrote 32 lines to Assets/Scripts/UI/VirtualJoystick.cs
+       2 using UnityEngine.EventSystems;
+       3 
+       4 public class VirtualJoystick : MonoBehaviour, IPointerDownHandle
+         r, IDragHandler, IPointerUpHandler
+       5 {
+       6     [SerializeField] RectTransform background;
+       7     [SerializeField] RectTransform handle;
+       8     [SerializeField] float radius = 50f;
+       9 
+      10     public Vector2 Direction { get; private set; }
+     … +27 lines (ctrl+o to expand)
+
+⏺ Write(Assets/Scripts/UI/HUDManager.cs)
+  ⎿  Wrote 35 lines to Assets/Scripts/UI/HUDManager.cs
+       1 using UnityEngine;
+       2 using TMPro;
+       3 
+       4 public class HUDManager : MonoBehaviour
+       5 {
+       6     public static HUDManager Instance { get; private set; }
+       7 
+       8     [SerializeField] TextMeshProUGUI moneyText;
+       9 
+      10     void Awake()
+     … +26 lines (ctrl+o to expand)
+
+⏺ Write(Assets/Scripts/UI/ZoneUI.cs)
+  ⎿  Wrote 18 lines to Assets/Scripts/UI/ZoneUI.cs
+       1 using UnityEngine;
+       2 using TMPro;
+       3 
+       4 public class ZoneUI : MonoBehaviour
+       5 {
+       6     [SerializeField] TextMeshPro labelText;
+       7     [SerializeField] TextMeshPro costText;
+       8 
+       9     public void SetLabel(string text)
+      10     {
+     … +8 lines (ctrl+o to expand)
+
+⏺ Write(Assets/Scripts/Player/PlayerController.cs)
+  ⎿  Wrote 92 lines to Assets/Scripts/Player/PlayerController.cs
+       1 using UnityEngine;
+       2 
+       3 [RequireComponent(typeof(Rigidbody))]
+       4 public class PlayerController : MonoBehaviour
+       5 {
+       6     [SerializeField] float moveSpeed = 5f;
+       7     [SerializeField] VirtualJoystick joystick;
+       8 
+       9     Rigidbody rb;
+      10     bool autoMoving;
+     … +88 lines (ctrl+o to expand)
+
+⏺ Write(Assets/Scripts/Player/PlayerInventory.cs)
+  ⎿  Wrote 95 lines to Assets/Scripts/Player/PlayerInventory.cs
+       2 using System.Collections;
+       3 using System.Collections.Generic;
+       4 
+       5 public class PlayerInventory : MonoBehaviour
+       6 {
+       7     [Header("Stack Layout")]
+       8     [SerializeField] Vector3 stackBaseOffset = new Vector3(0f, 0
+         .15f, -0.45f);
+       9     [SerializeField] float itemSpacing = 0.22f;
+      10     [SerializeField] float posLerpSpeed = 14f;
+     … +91 lines (ctrl+o to expand)
+
+⏺ Write(Assets/Scripts/Player/PlayerAnimator.cs)
+  ⎿  Wrote 26 lines to Assets/Scripts/Player/PlayerAnimator.cs
+       2 using UnityEngine;
+       3 public class PlayerAnimator : MonoBehaviour
+       4 {
+         "); static readonly int SpeedHash = Animator.StringToHash("Speed
+       6     static readonly int MineHash = Animator.StringToHash("Mine")
+         ;
+         up");tatic readonly int PickupHash = Animator.StringToHash("Pick
+       8 
+       9     Animator anim;
+      10     PlayerController controller;
+     … +17 lines (ctrl+o to expand)
+
+⏺ Write(Assets/Scripts/Player/CameraController.cs)
+  ⎿  Wrote 27 lines to Assets/Scripts/Player/CameraController.cs
+       1 using UnityEngine;
+       2 
+       3 public class CameraController : MonoBehaviour
+       4 {
+       5     [SerializeField] Transform target;
+       6     [SerializeField] Vector3 offset = new Vector3(0f, 12f, -9f);
+       7     [SerializeField] float smoothSpeed = 8f;
+       8 
+       9     // Camera Y stays fixed; only X/Z tracks the player
+      10     float fixedY;
+     … +20 lines (ctrl+o to expand)
+
+⏺ Write(Assets/Scripts/Items/OreItem.cs)
+  ⎿  Wrote 28 lines to Assets/Scripts/Items/OreItem.cs
+      1 using UnityEngine;
+      2 using System.Collections;
+      3 
+      4 public class OreItem : MonoBehaviour
+      5 {
+      6     [SerializeField] float respawnDelay = 5f;
+      7 
+      8     Vector3 originPos;
+      9     public bool IsMined { get; private set; }
+     … +18 lines (ctrl+o to expand)
+
+⏺ Write(Assets/Scripts/Items/HandcuffItem.cs)
+  ⎿  Wrote 4 lines to Assets/Scripts/Items/HandcuffItem.cs
+      1 using UnityEngine;
+      2 
+      3 // Marker component for handcuff inventory visuals
+      4 public class HandcuffItem : MonoBehaviour { }
+
+⏺ Write(Assets/Scripts/Items/MoneyItem.cs)
+  ⎿  Wrote 4 lines to Assets/Scripts/Items/MoneyItem.cs
+      1 using UnityEngine;
+      2 
+      3 // Marker component for money inventory visuals
+      4 public class MoneyItem : MonoBehaviour { }
+
+⏺ Write(Assets/Scripts/Zones/BaseZone.cs)
+  ⎿  Wrote 49 lines to Assets/Scripts/Zones/BaseZone.cs
+       1 using UnityEngine;
+       2 
+       3 [RequireComponent(typeof(Collider))]
+       4 public abstract class BaseZone : MonoBehaviour
+       5 {
+       6     protected PlayerController player;
+       7     protected PlayerInventory inventory;
+       8     protected PlayerAnimator playerAnim;
+       9 
+      10     void Awake()
+     … +41 lines (ctrl+o to expand)
+
+⏺ Write(Assets/Scripts/Zones/MineZone.cs)
+  ⎿  Wrote 77 lines to Assets/Scripts/Zones/MineZone.cs
+      1 using UnityEngine;
+      2 using System.Collections;
+      3 using System.Collections.Generic;
+      4 
+      5 public class MineZone : BaseZone
+      6 {
+      7     [Header("References")]
+      8     [SerializeField] List<OreItem> ores = new List<OreItem>();
+      9     [SerializeField] GameObject oreVisualPrefab;
+     … +77 lines (ctrl+o to expand)
+⏺ Write(Assets/Scripts/Zones/ManufacturingZone.cs)
+  ⎿  Wrote 102 lines to Assets/Scripts/Zones/ManufacturingZone.cs
+       1 using UnityEngine;
+       2 using System.Collections;
+       3 using System.Collections.Generic;
+       4 
+       5 public class ManufacturingZone : BaseZone
+       6 {
+       7     [Header("References")]
+       8     [SerializeField] HandcuffStackZone handcuffStackZone;
+       9     [SerializeField] GameObject handcuffVisualPrefab;
+      10     [SerializeField] Material conveyorMaterial;
+     … +103 lines (ctrl+o to expand)
+
+⏺ Write(Assets/Scripts/Zones/HandcuffStackZone.cs)
+  ⎿  Wrote 61 lines to Assets/Scripts/Zones/HandcuffStackZone.cs
+      1 using UnityEngine;
+      2 using System.Collections;
+      3 using System.Collections.Generic;
+      4 
+      5 public class HandcuffStackZone : BaseZone
+      6 {
+      7     [Header("Stack Layout")]
+      8     [SerializeField] Vector3 stackBase = Vector3.zero;
+      9     [SerializeField] float itemSpacing = 0.18f;
+     … +56 lines (ctrl+o to expand)
+
+⏺ Write(Assets/Scripts/NPC/PrisonerNPC.cs)
+  ⎿  Wrote 65 lines to Assets/Scripts/NPC/PrisonerNPC.cs
+       1 using UnityEngine;
+       2 using System.Collections;
+       3 
+       4 public class PrisonerNPC : MonoBehaviour
+       5 {
+       6     [SerializeField] float walkSpeed = 2f;
+       7     [SerializeField] GameObject handcuffIconPrefab;
+       8 
+       9     public int RequiredHandcuffs { get; private set; }
+      10     int handcuffsConsumed;
+     … +62 lines (ctrl+o to expand)
+
+⏺ Write(Assets/Scripts/Zones/DeskZone.cs)
+  ⎿  Wrote 123 lines to Assets/Scripts/Zones/DeskZone.cs
+       1 using UnityEngine;
+       2 using System.Collections;
+       3 using System.Collections.Generic;
+       4 
+       5 public class DeskZone : BaseZone
+       6 {
+       7     [Header("References")]
+       8     [SerializeField] MoneyStackZone moneyStackZone;
+       9     [SerializeField] GameObject prisonerPrefab;
+      10     [SerializeField] Transform[] queueSlots;
+     … +127 lines (ctrl+o to expand)
+
+⏺ Write(Assets/Scripts/Zones/MoneyStackZone.cs)
+  ⎿  Wrote 61 lines to Assets/Scripts/Zones/MoneyStackZone.cs
+      1 using UnityEngine;
+      2 using System.Collections;
+      3 using System.Collections.Generic;
+      4 
+      5 public class MoneyStackZone : BaseZone
+      6 {
+      7     [Header("Stack Layout")]
+      8     [SerializeField] Vector3 stackBase = Vector3.zero;
+      9     [SerializeField] float itemSpacing = 0.15f;
+     … +56 lines (ctrl+o to expand)
+
+⏺ Write(Assets/Scripts/Zones/UpgradeZone.cs)
+  ⎿  Wrote 68 lines to Assets/Scripts/Zones/UpgradeZone.cs
+      1 using UnityEngine;
+      2 using System.Collections;
+      3 
+      4 public enum UpgradeType { Tool, Worker, DeskWorker }
+      5 
+      6 public class UpgradeZone : BaseZone
+      7 {
+      8     [SerializeField] UpgradeType upgradeType;
+      9     [SerializeField] ZoneUI zoneUI;
+     … +62 lines (ctrl+o to expand)
+
+⏺ 모든 스크립트가 작성됐는지 확인합니다.
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+⏺ 21개 스크립트가 모두 생성됐습니다. 이제 메모리에 프로젝트 정보를 저장합니다.
+
+  Listed 1 directory, wrote 2 memories (ctrl+o to expand)
+
+⏺ CoreLoop 스크립트 21개가 모두 생성됐습니다.
+
+  ---
+  생성된 파일 목록
+
+  ┌───────────┬──────────────────────────┬──────────────────────────────────┐
+  │   폴더    │           파일           │               역할               │
+  ├───────────┼──────────────────────────┼──────────────────────────────────┤
+  │ Managers/ │ GameManager.cs           │ 싱글톤, 돈 관리 (AddMoney,       │
+  │           │                          │ TrySpendMoney)                   │
+  ├───────────┼──────────────────────────┼──────────────────────────────────┤
+  │ Managers/ │ UpgradeManager.cs        │ 업그레이드 상태 관리 (stub)      │
+  ├───────────┼──────────────────────────┼──────────────────────────────────┤
+  │ Utils/    │ ObjectPool.cs            │ 제네릭 오브젝트 풀               │
+  ├───────────┼──────────────────────────┼──────────────────────────────────┤
+  │ Player/   │ PlayerController.cs      │ Rigidbody 이동 + 조이스틱 +      │
+  │           │                          │ 자동이동                         │
+  ├───────────┼──────────────────────────┼──────────────────────────────────┤
+  │ Player/   │ PlayerInventory.cs       │ 등 뒤 스택 (Ore→Handcuff→Money   │
+  │           │                          │ 순서)                            │
+  ├───────────┼──────────────────────────┼──────────────────────────────────┤
+  │ Player/   │ PlayerAnimator.cs        │ Animator 래퍼                    │
+  ├───────────┼──────────────────────────┼──────────────────────────────────┤
+  │ Player/   │ CameraController.cs      │ X/Z 추적, Y 고정                 │
+  ├───────────┼──────────────────────────┼──────────────────────────────────┤
+  │ Zones/    │ BaseZone.cs              │ 추상 베이스, 트리거 처리         │
+  ├───────────┼──────────────────────────┼──────────────────────────────────┤
+  │ Zones/    │ MineZone.cs              │ 가장 가까운 광석 자동 채굴       │
+  ├───────────┼──────────────────────────┼──────────────────────────────────┤
+  │ Zones/    │ ManufacturingZone.cs     │ 광석 → 수갑 (플레이어 이탈       │
+  │           │                          │ 후에도 계속 처리)                │
+  ├───────────┼──────────────────────────┼──────────────────────────────────┤
+  │ Zones/    │ HandcuffStackZone.cs     │ 수갑 보관 + 자동 수령            │
+  ├───────────┼──────────────────────────┼──────────────────────────────────┤
+  │ Zones/    │ DeskZone.cs              │ 수감자 처리, DeskZone에서 돈     │
+  │           │                          │ 카운터 증가                      │
+  ├───────────┼──────────────────────────┼──────────────────────────────────┤
+  │ Zones/    │ MoneyStackZone.cs        │ 돈 보관 + 자동 수령              │
+  ├───────────┼──────────────────────────┼──────────────────────────────────┤
+  │ Zones/    │ UpgradeZone.cs           │ 업그레이드 Zone                  │
+  ├───────────┼──────────────────────────┼──────────────────────────────────┤
+  │ NPC/      │ PrisonerNPC.cs           │ 줄 서기 + 감옥 이동 후 소멸      │
+  ├───────────┼──────────────────────────┼──────────────────────────────────┤
+  │ Items/    │ OreItem.cs               │ 채굴 대상, 자동 리스폰           │
+  ├───────────┼──────────────────────────┼──────────────────────────────────┤
+  │ Items/    │ HandcuffItem.cs,         │ 마커 컴포넌트                    │
+  │           │ MoneyItem.cs             │                                  │
+  ├───────────┼──────────────────────────┼──────────────────────────────────┤
+  │ UI/       │ VirtualJoystick.cs       │ 터치 조이스틱                    │
+  ├───────────┼──────────────────────────┼──────────────────────────────────┤
+  │ UI/       │ HUDManager.cs            │ TextMeshPro 돈 카운터            │
+  ├───────────┼──────────────────────────┼──────────────────────────────────┤
+  │ UI/       │ ZoneUI.cs                │ Zone 레이블/비용 표시            │
+  └───────────┴──────────────────────────┴──────────────────────────────────┘
+
+  ---
+  Unity Editor에서 해야 할 설정
+
+  1. Player GameObject → Tag를 "Player" 로 설정, PlayerController +
+  PlayerInventory + Rigidbody 부착
+  2. VirtualJoystick Canvas → Screen Space - Overlay, 하단 중앙 배치
+  3. MineZone → OreItem 자식 오브젝트들 배치, Collider(isTrigger) 추가
+  4. ManufacturingZone → HandcuffStackZone 레퍼런스 연결
+  5. DeskZone → MoneyStackZone 레퍼런스 + queueSlots Transforms 배치
+  6. Camera → CameraController 부착, target에 Player 연결
+
+✻ Brewed for 26m 51s
+
+※ recap: Building a Prison Life mobile idle game in Unity 6. All 21 CoreLoop scripts are written and saved under Assets/Scripts/. Next: open the Unity Editor and set up the GameScene with Player, Zones, Camera, and UI following the setup checklist above. (disable recaps in /config)
+
+❯ Assets/Scripts/Player/PlayerController.cs(40,16): error CS1061: 'Rigidbody'   
+  does not contain a definition for 'linearVelocity' and no accessible          
+  extension method 'linearVelocity' accepting a first argument of type          
+  'Rigidbody' could be found (are you missing a using directive or an assembly  
+  reference?)                                                                   
+
+⏺ linearVelocity는 Unity 6000.0.23f 이후부터 지원됩니다. 사용 중인 Unity 버전에
+  맞게 velocity로 교체합니다.
+
+⏺ Update(Assets/Scripts/Player/PlayerController.cs)
+  ⎿  Added 1 line, removed 1 line
+      46          else
+      47          {
+      48              Vector3 norm = dir.normalized;
+      49 -            rb.linearVelocity = new Vector3(norm.x * moveSpeed,
+         - rb.linearVelocity.y, norm.z * moveSpeed);                     
+      49 +            rb.velocity = new Vector3(norm.x * moveSpeed, rb.ve
+         +locity.y, norm.z * moveSpeed);                                 
+      50              RotateToward(norm);
+      51              IsMoving = true;
+      52          }
+
+⏺ Update(Assets/Scripts/Player/PlayerController.cs)
+  ⎿  Added 1 line, removed 1 line
+      37  
+      38          if (dist < autoStopDist)
+      39          {
+      40 -            rb.linearVelocity = new Vector3(0f, rb.linearVeloci
+         -ty.y, 0f);                                                     
+      40 +            rb.velocity = new Vector3(0f, rb.velocity.y, 0f);  
+      41              IsMoving = false;
+      42              var callback = onReached;
+      43              ClearAutoMove();
+
+⏺ Update(Assets/Scripts/Player/PlayerController.cs)
+  ⎿  Added 1 line, removed 1 line
+      56      {
+      57          Vector2 input = joystick != null ? joystick.Direction :
+           Vector2.zero;
+      58          Vector3 dir = new Vector3(input.x, 0f, input.y);
+      59 -        rb.linearVelocity = new Vector3(dir.x * moveSpeed, rb.l
+         -inearVelocity.y, dir.z * moveSpeed);                           
+      59 +        rb.velocity = new Vector3(dir.x * moveSpeed, rb.velocit
+         +y.y, dir.z * moveSpeed);                                       
+      60  
+      61          if (dir.sqrMagnitude > 0.01f)
+      62          {
+
+⏺ linearVelocity → velocity 3곳 모두 교체했습니다. rb.velocity는 모든 Unity
+  버전에서 동작합니다.
+
+✻ Worked for 20s
+
+※ recap: Prison Life 모바일 아이들 게임의 CoreLoop 스크립트 21개를 작성 완료했습니다. 다음 단계는 Unity Editor에서 씬 세팅(플레이어 태그, Zone 배치, 레퍼런스 연결)입니다. (disable recaps in /config)
+
+❯ 참고로 버전은 2022.3.62f2이고 해상도는 720*1280이야                           
+
+⏺ 메모리를 업데이트하고, 2022.3에서 문제가 될 수 있는 코드를 확인합니다.
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+⏺ 다른 호환성 문제는 없습니다. 메모리를 수정합니다.
+
+  Wrote 2 memories (ctrl+o to expand)
+
+⏺ 확인 사항 두 가지:
+
+  1. rb.velocity - 이미 수정 완료, 다른 Unity 6 전용 API는 없음
+  2. 720×1280 해상도 관련해서 VirtualJoystick의 radius 기본값 50f는 Canvas
+  Scale에 따라 너무 작을 수 있습니다. Canvas에 Canvas Scaler 컴포넌트를 붙이고
+  설정해주세요:
+    - UI Scale Mode: Scale With Screen Size
+    - Reference Resolution: 720 × 1280
+    - Match: 0.5 (Width/Height 중간)
+
+  그러면 조이스틱 radius = 50f가 실제 화면에서 적절한 크기로 나옵니다.
+
+✻ Baked for 24s
+
+※ recap: Prison Life 모바일 아이들 게임의 CoreLoop 스크립트 21개를 작성했고 Unity 2022.3 호환성 오류도 수정했습니다. 다음은 Unity Editor에서 씬 세팅(플레이어 태그, Zone 배치, 카메라, UI 캔버스 연결)을 진행하면 됩니다. (disable recaps in /config)
+❯ 씬 세팅하는 법 알려줘.   Unity Editor에서 해야 할 설정                        
+                                                                                
+    1. Player GameObject → Tag를 "Player" 로 설정, PlayerController +           
+  PlayerInventory +                                                             
+     Rigidbody 부착                                                             
+    2. VirtualJoystick Canvas → Screen Space - Overlay, 하단 중앙 배치          
+    3. MineZone → OreItem 자식 오브젝트들 배치, Collider(isTrigger) 추가        
+    4. ManufacturingZone → HandcuffStackZone 레퍼런스 연결                      
+    5. DeskZone → MoneyStackZone 레퍼런스 + queueSlots Transforms 배치          
+    6. Camera → CameraController 부착, target에 Player 연결 지금은 이것만 했어. 
+
+⏺ 전체 씬 세팅 가이드를 순서대로 설명할게요.
+
+  ---
+  씬 세팅 완전 가이드
+
+  1단계 — Hierarchy 구조 먼저 만들기
+
+  Hierarchy에서 아래 구조를 생성하세요 (Create Empty):
+
+  SampleScene
+  ├── @Managers
+  ├── @Camera
+  ├── Player
+  ├── Floor
+  ├── Zones
+  │   ├── MineZone
+  │   ├── ManufacturingZone
+  │   ├── HandcuffStackZone
+  │   ├── DeskZone
+  │   └── MoneyStackZone
+  └── Canvas
+
+  ---
+  2단계 — @Managers
+
+  @Managers GameObject 선택 → Inspector에서 컴포넌트 추가:
+  - GameManager
+  - UpgradeManager
+
+  ---
+  3단계 — Floor (바닥)
+
+  1. Floor → 3D Object > Plane
+  2. Transform: Position (0, 0, 0), Scale (5, 1, 5) (50×50 유닛)
+  3. Material 새로 만들어서 회색 타일 색상 (#8E8E8E) 적용
+
+  ---
+  4단계 — Player 세팅
+
+  Player GameObject 구성:
+
+  ┌──────────────────┬───────────────────────────────────────────────────────┐
+  │     컴포넌트     │                         설정                          │
+  ├──────────────────┼───────────────────────────────────────────────────────┤
+  │ Tag              │ Player                                                │
+  ├──────────────────┼───────────────────────────────────────────────────────┤
+  │ PlayerController │ Joystick은 아직 비워둠 (7단계 후 연결)                │
+  ├──────────────────┼───────────────────────────────────────────────────────┤
+  │ PlayerInventory  │ 기본값                                                │
+  ├──────────────────┼───────────────────────────────────────────────────────┤
+  │ Rigidbody        │ Mass=1, Drag=5, Angular Drag=10, Freeze Rotation: X Y │
+  │                  │  Z 모두 체크                                          │
+  ├──────────────────┼───────────────────────────────────────────────────────┤
+  │ CapsuleCollider  │ Height=1.8, Radius=0.3                                │
+  └──────────────────┴───────────────────────────────────────────────────────┘
+
+  시각적 자식 오브젝트 (Player 하위):
+
+  Player
+  ├── Body  ← Capsule 프리미티브, Scale(0.5, 0.5, 0.5), 파란색 Material
+  └── Head  ← Sphere 프리미티브, Position(0, 0.75, 0), Scale(0.35, 0.35, 0.35)
+
+  Body와 Head의 Collider 컴포넌트는 Remove (Rigidbody는 Player 루트에만).
+
+  ---
+  5단계 — Camera 세팅
+
+  @Camera 안에 Camera 컴포넌트가 있는 GameObject (또는 Main Camera 사용):
+
+  ┌──────────────────┬────────────────────────────┐
+  │       항목       │             값             │
+  ├──────────────────┼────────────────────────────┤
+  │ Position         │ (0, 12, -9)                │
+  ├──────────────────┼────────────────────────────┤
+  │ Rotation         │ (54, 0, 0)                 │
+  ├──────────────────┼────────────────────────────┤
+  │ CameraController │ Target → Player GameObject │
+  └──────────────────┴────────────────────────────┘
+
+  ---
+  6단계 — Zone 배치 및 세팅
+
+  각 Zone의 공통 작업:
+  - BoxCollider 추가 → Is Trigger ✓
+  - Zone 스크립트 부착
+  - 바닥 표시용 색상 Material 적용 (선택)
+
+  MineZone
+
+  위치 (-8, 0, 6), Scale (6, 0.1, 6) 정도로 잡고 Box Collider 크기 맞추기.
+
+  광석 자식 오브젝트 만들기 (3~5개):
+
+  MineZone
+  ├── Ore_1  ← Sphere, Scale(0.6,0.6,0.6), 어두운 회색 Material, OreItem
+  스크립트
+  ├── Ore_2
+  ├── Ore_3
+  └── ...
+
+  OreItem이 붙은 Sphere의 Sphere Collider는 그대로 유지 (플레이어 오토무브의
+  거리 계산에 필요).
+
+  MineZone 스크립트 Inspector: Ores 리스트에 각 OreItem을 드래그 또는 비워두면
+  자동 수집.
+
+  ManufacturingZone
+
+  위치 (0, 0, 6). 시각적으로 큐브 + 자식 실린더로 기계처럼 보이게.
+
+  - HandcuffStackZone 레퍼런스 연결 (Inspector에서)
+
+  HandcuffStackZone
+
+  위치 (5, 0, 6). 작은 플랫폼 모양.
+
+  - Stack Base Offset: 기본값 (0, 0.1, 0) 으로 조정 (Items이 바닥에서 쌓이도록)
+
+  DeskZone
+
+  위치 (5, 0, -4).
+
+  큐 슬롯 자식 오브젝트 만들기:
+
+  DeskZone
+  ├── DeskVisual  ← Cube, 데스크 모양
+  ├── QueueSlot_0  ← Empty, Position(5, 0, -5.5)  ← 데스크 바로 앞
+  ├── QueueSlot_1  ← Empty, Position(5, 0, -7)
+  ├── QueueSlot_2  ← Empty, Position(5, 0, -8.5)
+  ├── QueueSlot_3  ← Empty, Position(5, 0, -10)
+  ├── QueueSlot_4  ← Empty, Position(5, 0, -11.5)
+  └── JailExit     ← Empty, Position(10, 0, -4)  ← 수감자 퇴장 방향
+
+  DeskZone 스크립트 Inspector:
+  - Money Stack Zone → MoneyStackZone 드래그
+  - Queue Slots → Size=5, 각 슬롯 드래그
+  - Jail Direction → JailExit 드래그
+
+  MoneyStackZone
+
+  위치 (8, 0, -4).
+
+  ---
+  7단계 — UI (Canvas + Joystick + HUD)
+
+  Canvas 설정:
+  - Canvas 컴포넌트: Render Mode = Screen Space - Overlay
+  - Canvas Scaler: UI Scale Mode = Scale With Screen Size, Reference = 720 × 
+  1280, Match = 0.5
+  - HUDManager 스크립트 추가
+
+  Hierarchy:
+
+  Canvas
+  ├── MoneyPanel  (앵커: 상단 우측)
+  │   └── MoneyText  ← TextMeshProUGUI, 흰색, 크기 40
+  ├── JoystickPanel  (앵커: 하단 중앙, Position Y = 150)
+  │   ├── JoystickBG  ← Image, 원형, 반투명 흰색, 150×150
+  │   │     └── VirtualJoystick.cs
+  │   │           - Background → JoystickBG RectTransform
+  │   │           - Handle → JoystickHandle RectTransform
+  │   │           - Radius: 50
+  │   └── JoystickHandle  ← Image, 원형, 흰색, 70×70 (JoystickBG의 자식)
+
+  ▎ JoystickBG에 VirtualJoystick 스크립트 붙이고, Background에는 JoystickBG 
+  ▎ 자신을, Handle에는 JoystickHandle을 드래그.
+
+  HUDManager Inspector:
+  - Money Text → MoneyText 드래그
+
+  ---
+  8단계 — 최종 레퍼런스 연결
+
+  ┌───────────────────┬──────────────────┬──────────────────────────────────┐
+  │     스크립트      │       필드       │            연결 대상             │
+  ├───────────────────┼──────────────────┼──────────────────────────────────┤
+  │ PlayerController  │ Joystick         │ JoystickBG (VirtualJoystick 있는 │
+  │                   │                  │  곳)                             │
+  ├───────────────────┼──────────────────┼──────────────────────────────────┤
+  │ ManufacturingZone │ Handcuff Stack   │ HandcuffStackZone                │
+  │                   │ Zone             │                                  │
+  ├───────────────────┼──────────────────┼──────────────────────────────────┤
+  │ DeskZone          │ Money Stack Zone │ MoneyStackZone                   │
+  └───────────────────┴──────────────────┴──────────────────────────────────┘
+
+  ---
+  9단계 — 실행 전 체크리스트
+
+  - Player Tag = "Player"
+  - Player Rigidbody Freeze Rotation X Y Z 체크
+  - 모든 Zone의 BoxCollider → Is Trigger 체크
+  - OreItem Sphere들의 Collider는 Trigger 아님 (위치 계산용)
+  - Canvas Scaler Reference Resolution = 720 × 1280
+  - GameManager, UpgradeManager가 씬에 있음
+
+  이 순서대로 세팅하면 플레이 버튼 누르자마자 조이스틱으로 이동 → MineZone 진입
+  시 자동 채굴까지 동작합니다.
+
+✻ Baked for 1m 14s
+
+❯ MineZone에 있는 광석은 채굴 후 5초가 지나면 재생해. 채굴 후 비활성화 -> 5초   
+  뒤 활성화되도록 해줘. 그리고 Zone에 있는 광석과 채굴 후 플레이어가 지닌       
+  광석은 모양과 크기가 다른 오브젝트야.                                         
+
+⏺ 두 가지를 수정합니다.
+
+  1. OreItem 버그 수정 — SetActive(false) 하면 코루틴이 같이 멈춰서 리스폰이 안
+  됩니다. Renderer/Collider만 끄는 방식으로 변경.
+  2. 인벤토리 광석 시각 — MineZone의 SpawnOreVisual을 씬 광석(Sphere)과 다른
+  모양으로 변경.
+
+⏺ Write(Assets/Scripts/Items/OreItem.cs)
+  ⎿  Added 17 lines, removed 3 lines
+       5  {
+       6      [SerializeField] float respawnDelay = 5f;
+       7  
+       8 +    Renderer[] renderers;                                      
+       9 +    Collider[] cols;                                           
+      10      Vector3 originPos;
+      11 +                                                               
+      12      public bool IsMined { get; private set; }
+      13  
+      11 -    void Awake() => originPos = transform.position;            
+      14 +    void Awake()                                               
+      15 +    {                                                          
+      16 +        originPos = transform.position;                        
+      17 +        renderers = GetComponentsInChildren<Renderer>();       
+      18 +        cols = GetComponentsInChildren<Collider>();            
+      19 +    }                                                          
+      20  
+      21      public void Mine()
+      22      {
+      23          if (IsMined) return;
+      24          IsMined = true;
+      17 -        gameObject.SetActive(false);                           
+      25 +        SetVisible(false);                                     
+      26          StartCoroutine(RespawnRoutine());
+      27      }
+      28  
+      29 +    void SetVisible(bool visible)                              
+      30 +    {                                                          
+      31 +        foreach (var r in renderers) r.enabled = visible;      
+      32 +        foreach (var c in cols) c.enabled = visible;           
+      33 +    }                                                          
+      34 +                                                               
+      35      IEnumerator RespawnRoutine()
+      36      {
+      37          yield return new WaitForSeconds(respawnDelay);
+      38          transform.position = originPos;
+      25 -        gameObject.SetActive(true);                            
+      39 +        SetVisible(true);                                      
+      40          IsMined = false;
+      41      }
+      42  }
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(Assets/Scripts/Zones/MineZone.cs)
+  ⎿  Added 2 lines, removed 1 line
+      69          return nearest;
+      70      }
+      71  
+      72 +    // 인벤토리 광석: 씬의 구형 바위와 구분되도록 작은 큐브 형 
+         +태                                                             
+      73      GameObject SpawnOreVisual(Vector3 pos)
+      74      {
+      75          if (oreVisualPrefab != null) return Instantiate(oreVisu
+          alPrefab, pos, Quaternion.identity);
+      75 -        return CreatePrimitive(PrimitiveType.Sphere, Vector3.on
+         -e * 0.22f, new Color(0.2f, 0.2f, 0.2f));                       
+      76 +        return CreatePrimitive(PrimitiveType.Cube, new Vector3(
+         +0.18f, 0.14f, 0.18f), new Color(0.22f, 0.17f, 0.12f));         
+      77      }
+      78  }
+
+⏺ ---
+  변경 내용 요약:
+
+  OreItem.cs — 리스폰 버그 수정
+  - 기존: SetActive(false) → 코루틴도 같이 멈춰서 리스폰 불가
+  - 수정: Renderer와 Collider만 비활성화 → GameObject는 살아있어 코루틴이 5초 후
+   정상 복구
+
+  MineZone.cs — 인벤토리 광석 모양 변경
+
+  ┌──────┬──────────────────────────┬──────────────────────────┐
+  │      │    씬 광석 (OreItem)     │  플레이어 인벤토리 광석  │
+  ├──────┼──────────────────────────┼──────────────────────────┤
+  │ 모양 │ Sphere (Editor에서 배치) │ Cube                     │
+  ├──────┼──────────────────────────┼──────────────────────────┤
+  │ 크기 │ Scale ~(0.6, 0.6, 0.6)   │ Scale (0.18, 0.14, 0.18) │
+  ├──────┼──────────────────────────┼──────────────────────────┤
+  │ 색상 │ 어두운 회색 #333333      │ 갈색빛 어두운 색 #38291F │
+  └──────┴──────────────────────────┴──────────────────────────┘
+
+  씬의 OreItem 오브젝트는 Sphere Collider를 그대로 유지해야 GetNearest() 거리
+  계산과 AutoMove가 정상 작동합니다.
+
+✻ Crunched for 1m 7s
+
+※ recap: Prison Life 모바일 아이들 게임의 CoreLoop 스크립트 21개 작성 완료, OreItem 리스폰 버그 수정됨. 다음은 Unity Editor에서 씬 세팅 후 플레이 테스트.
+
+❯ mine 존의 스케일을 8, 0.1, 12로 설정했고 그 안에 8*12로 ore를 배치할거야.     
+  mine zone의 계층 구조를 재구성해줘.                                           
+
+⏺ 8×12 = 96개를 수동으로 배치하는 건 비효율적입니다. MineZone이 런타임에 
+  자동으로 그리드 생성하도록 바꾸겠습니다. 씬에는 OreContainer 하나만 만들면
+  됩니다.
+
+  스케일 (8, 0.1, 12) 오브젝트의 자식으로 광석을 두면 Y 스케일이 0.1 배 적용되어
+   광석이 납작해지는 문제도 함께 해결합니다.
+
+⏺ Write(Assets/Scripts/Zones/MineZone.cs)
+  ⎿  Added 69 lines, removed 9 lines
+       4  
+       5  public class MineZone : BaseZone
+       6  {
+       7 -    [Header("References")]                                     
+       8 -    [SerializeField] List<OreItem> ores = new List<OreItem>(); 
+       9 -    [SerializeField] GameObject oreVisualPrefab;               
+       7 +    [Header("Ore Grid (런타임 자동 생성)")]                    
+       8 +    [SerializeField] int gridCols = 8;                         
+       9 +    [SerializeField] int gridRows = 12;                        
+      10 +    [SerializeField] float oreSpacing = 1f;                    
+      11 +    [SerializeField] GameObject orePrefab;       // 씬에 배치되
+         +는 광석 프리팹 (미설정 시 기본 구체)                           
+      12 +    [SerializeField] Transform oreParent;        // OreContaine
+         +r 오브젝트 연결 (스케일 1,1,1)                                 
+      13  
+      14 +    [Header("인벤토리 비주얼")]                                
+      15 +    [SerializeField] GameObject oreVisualPrefab; // 플레이어 등
+         +에 쌓이는 광석 (미설정 시 작은 큐브)                           
+      16 +                                                               
+      17      [Header("Tuning")]
+      18      [SerializeField] float mineAnimSeconds = 0.5f;
+      19  
+      20 +    readonly List<OreItem> ores = new List<OreItem>();         
+      21      Coroutine mineLoop;
+      22  
+      23      protected override void OnAwake()
+      24      {
+      18 -        if (ores.Count == 0)                                   
+      19 -            ores.AddRange(GetComponentsInChildren<OreItem>()); 
+      25 +        GenerateOreGrid();                                     
+      26      }
+      27  
+      28 +    // BoxCollider bounds 기준으로 월드 좌표에 광석 배치       
+      29 +    void GenerateOreGrid()                                     
+      30 +    {                                                          
+      31 +        Collider col = GetComponent<Collider>();               
+      32 +        Bounds bounds = col != null                            
+      33 +            ? col.bounds                                       
+      34 +            : new Bounds(transform.position, new Vector3(gridCo
+         +ls, 1f, gridRows));                                            
+      35 +                                                               
+      36 +        // 좌하단 기준 + 0.5 spacing 여백으로 시작             
+      37 +        float startX = bounds.min.x + oreSpacing * 0.5f;       
+      38 +        float startZ = bounds.min.z + oreSpacing * 0.5f;       
+      39 +        // Zone Y 상단 + 약간 위 (바닥 위에 올라오도록)        
+      40 +        float oreY = bounds.max.y + 0.25f;                     
+      41 +                                                               
+      42 +        // oreParent 미설정 시 MineZone의 부모를 사용 (씬 루트)
+      43 +        Transform parent = oreParent != null ? oreParent : (tra
+         +nsform.parent != null ? transform.parent : transform);         
+      44 +                                                               
+      45 +        for (int row = 0; row < gridRows; row++)               
+      46 +        {                                                      
+      47 +            for (int col2 = 0; col2 < gridCols; col2++)        
+      48 +            {                                                  
+      49 +                Vector3 pos = new Vector3(                     
+      50 +                    startX + col2 * oreSpacing,                
+      51 +                    oreY,                                      
+      52 +                    startZ + row * oreSpacing                  
+      53 +                );                                             
+      54 +                                                               
+      55 +                GameObject go = orePrefab != null              
+      56 +                    ? Instantiate(orePrefab, pos, Quaternion.Eu
+         +ler(0f, Random.Range(0f, 360f), 0f), parent)                   
+      57 +                    : CreateSceneOre(pos, parent);             
+      58 +                                                               
+      59 +                OreItem item = go.GetComponent<OreItem>();     
+      60 +                if (item == null) item = go.AddComponent<OreIte
+         +m>();                                                          
+      61 +                ores.Add(item);                                
+      62 +            }                                                  
+      63 +        }                                                      
+      64 +    }                                                          
+      65 +                                                               
+      66 +    // 씬 광석 기본 비주얼: 불규칙한 크기의 어두운 구체 (인벤토
+         +리 큐브와 구분)                                                
+      67 +    static GameObject CreateSceneOre(Vector3 pos, Transform par
+         +ent)                                                           
+      68 +    {                                                          
+      69 +        var go = GameObject.CreatePrimitive(PrimitiveType.Spher
+         +e);                                                            
+      70 +        go.transform.SetParent(parent);                        
+      71 +        go.transform.position = pos;                           
+      72 +        go.transform.rotation = Quaternion.Euler(0f, Random.Ran
+         +ge(0f, 360f), 0f);                                             
+      73 +        go.transform.localScale = new Vector3(                 
+      74 +            Random.Range(0.45f, 0.65f),                        
+      75 +            Random.Range(0.38f, 0.55f),                        
+      76 +            Random.Range(0.45f, 0.65f)                         
+      77 +        );                                                     
+      78 +        go.GetComponent<Renderer>().material.color = new Color(
+         +0.18f, 0.18f, 0.18f);                                          
+      79 +        return go;                                             
+      80 +    }                                                          
+      81 +                                                               
+      82      protected override void OnPlayerEnter()
+      83      {
+      84          if (mineLoop != null) StopCoroutine(mineLoop);
+     ...
+      101              if (target == null) { yield return new WaitForSeco
+           nds(0.5f); continue; }
+      102  
+      103              bool arrived = false;
+       44 -            player.SetAutoMove(target.transform.position, () =
+          -> arrived = true, 0.6f);                                      
+      104 +            player.SetAutoMove(target.transform.position, () =
+          +> arrived = true, 0.7f);                                      
+      105              yield return new WaitUntil(() => arrived || player
+            == null || target.IsMined);
+      106  
+      107              if (player == null || target.IsMined) continue;
+     ...
+      112              if (target == null || target.IsMined || inventory 
+           == null || !inventory.CanAddOre) continue;
+      113  
+      114              target.Mine();
+       55 -            inventory.AddOre(SpawnOreVisual(target.transform.p
+          -osition));                                                    
+      115 +            inventory.AddOre(SpawnInventoryOre(target.transfor
+          +m.position));                                                 
+      116          }
+      117      }
+      118  
+     ...
+      129          return nearest;
+      130      }
+      131  
+       72 -    // 인벤토리 광석: 씬의 구형 바위와 구분되도록 작은 큐브 형
+          -태                                                            
+       73 -    GameObject SpawnOreVisual(Vector3 pos)                    
+      132 +    // 플레이어 인벤토리 광석: 씬 구체 바위와 구분되는 작은 큐
+          +브                                                            
+      133 +    GameObject SpawnInventoryOre(Vector3 pos)                 
+      134      {
+      135          if (oreVisualPrefab != null) return Instantiate(oreVis
+           ualPrefab, pos, Quaternion.identity);
+      136          return CreatePrimitive(PrimitiveType.Cube, new Vector3
+           (0.18f, 0.14f, 0.18f), new Color(0.22f, 0.17f, 0.12f));
+
+⏺ ---
+  Hierarchy 구조
+
+  Scene
+  ├── MineZone          ← scale (8, 0.1, 12), MineZone.cs,
+  BoxCollider(isTrigger)
+  │                        Ore Parent 필드 → OreContainer 연결
+  └── OreContainer      ← scale (1, 1, 1), position (0, 0, 0)
+                           런타임에 96개 광석이 여기 자동 생성됨
+
+  ▎ OreContainer를 MineZone 자식으로 두면 안 됩니다. 부모 scale (8, 0.1, 12)가 
+  ▎ 광석에 상속되어 Y가 0.1배로 납작해집니다.
+
+  ---
+  Inspector 설정
+
+  ┌─────────────┬──────────────────────────────┐
+  │    필드     │              값              │
+  ├─────────────┼──────────────────────────────┤
+  │ Grid Cols   │ 8                            │
+  ├─────────────┼──────────────────────────────┤
+  │ Grid Rows   │ 12                           │
+  ├─────────────┼──────────────────────────────┤
+  │ Ore Spacing │ 1                            │
+  ├─────────────┼──────────────────────────────┤
+  │ Ore Parent  │ OreContainer 드래그          │
+  ├─────────────┼──────────────────────────────┤
+  │ Ore Prefab  │ 비워두면 기본 구체 자동 생성 │
+  └─────────────┴──────────────────────────────┘
+
+  결과
+
+  플레이 버튼 누르면 OreContainer 아래에 96개 광석이 자동으로 생성됩니다. 각
+  광석은 랜덤 크기와 Y 회전이 적용되어 자연스러운 배치처럼 보입니다.
+
+✻ Brewed for 1m 55s
+
+※ recap: Prison Life 모바일 아이들 게임 Unity CoreLoop 스크립트 전체 작성 완료. MineZone 씬 세팅 중이며, 다음은 Unity Editor에서 OreContainer를 MineZone의 Ore Parent 필드에 연결하고 플레이 버튼으로 광석 자동 생성을 확인하면 됩니다.
+
+❯ 1. 게임 실행 시 prisoner는 queueSlot 위치에 생성, slot 0의 수감자가 exit하면  
+  2에 새로 수감자 활성(exit한 수감자 재사용), 2->1, 1->0로 이동하기. 2.         
+  조이스틱은 핸들만 필요함. 터치하면 그 자리에 핸들이 생기고 드래그로 플레이어  
+  이동                                                                          
+
+⏺ 두 파일을 재작성합니다. 먼저 현재 코드를 확인합니다.
+
+  Read 2 files (ctrl+o to expand)
+
+⏺ Write(Assets/Scripts/NPC/PrisonerNPC.cs)
+  ⎿  Added 29 lines, removed 21 lines
+       1  using UnityEngine;
+       2  using System.Collections;
+       3 +using System;                                                  
+       4  
+       5  public class PrisonerNPC : MonoBehaviour
+       6  {
+       7      [SerializeField] float walkSpeed = 2f;
+       7 -    [SerializeField] GameObject handcuffIconPrefab;            
+       8  
+       9      public int RequiredHandcuffs { get; private set; }
+      10      int handcuffsConsumed;
+     ...
+      12      Vector3 queueTarget;
+      13      bool isWalking;
+      14  
+      15 -    public void Initialize(int required, Vector3 startPos)     
+      16 -    {                                                          
+      17 -        RequiredHandcuffs = required;                          
+      18 -        transform.position = startPos;                         
+      19 -        queueTarget = startPos;                                
+      20 -    }                                                          
+      15 +    public bool IsFullyProcessed => handcuffsConsumed >= Requir
+         +edHandcuffs;                                                   
+      16 +    public int Remaining => Mathf.Max(0, RequiredHandcuffs - ha
+         +ndcuffsConsumed);                                              
+      17  
+      22 -    public void MoveToQueuePosition(Vector3 pos)               
+      18 +    public void Initialize(int required, Vector3 pos)          
+      19      {
+      20 +        RequiredHandcuffs = required;                          
+      21 +        handcuffsConsumed = 0;                                 
+      22 +        transform.position = pos;                              
+      23          queueTarget = pos;
+      25 -        isWalking = true;                                      
+      24 +        isWalking = false;                                     
+      25 +        gameObject.SetActive(true);                            
+      26      }
+      27  
+      28 -    public void ConsumeHandcuff()                              
+      28 +    // 처리 완료 후 재사용: 퇴장 애니 → 마지막 슬롯으로 순간이 
+         +동 → 콜백                                                      
+      29 +    public void LeaveAndRecycle(Vector3 exitDir, Vector3 recycl
+         +ePos, int newRequirement, Action onRecycled)                   
+      30      {
+      30 -        handcuffsConsumed++;                                   
+      31 +        isWalking = false;                                     
+      32 +        StartCoroutine(LeaveRoutine(exitDir, recyclePos, newReq
+         +uirement, onRecycled));                                        
+      33      }
+      34  
+      33 -    public bool IsFullyProcessed => handcuffsConsumed >= Requir
+         -edHandcuffs;                                                   
+      35 +    public void ConsumeHandcuff() => handcuffsConsumed++;      
+      36  
+      35 -    // Returns the remaining handcuffs needed                  
+      36 -    public int Remaining => Mathf.Max(0, RequiredHandcuffs - ha
+         -ndcuffsConsumed);                                              
+      37 -                                                               
+      38 -    public void LeaveToJail(Vector3 jailDirection)             
+      37 +    public void MoveToQueuePosition(Vector3 pos)               
+      38      {
+      40 -        isWalking = false;                                     
+      41 -        StartCoroutine(LeaveRoutine(jailDirection));           
+      39 +        queueTarget = pos;                                     
+      40 +        isWalking = true;                                      
+      41      }
+      42  
+      43      void Update()
+     ...
+      51          }
+      52      }
+      53  
+      55 -    IEnumerator LeaveRoutine(Vector3 direction)                
+      54 +    IEnumerator LeaveRoutine(Vector3 exitDir, Vector3 recyclePo
+         +s, int newRequirement, Action onRecycled)                      
+      55      {
+      57 -        Vector3 exitTarget = transform.position + direction.nor
+         -malized * 8f;                                                  
+      56 +        // 감옥 방향으로 걸어서 퇴장                           
+      57 +        Vector3 exitTarget = transform.position + exitDir.norma
+         +lized * 8f;                                                    
+      58          while (Vector3.Distance(transform.position, exitTarget)
+           > 0.1f)
+      59          {
+      60              transform.position = Vector3.MoveTowards(transform.
+          position, exitTarget, walkSpeed * Time.deltaTime);
+      61              yield return null;
+      62          }
+      63 -        gameObject.SetActive(false);                           
+      63 +                                                               
+      64 +        // 마지막 슬롯으로 순간이동 후 재초기화                
+      65 +        RequiredHandcuffs = newRequirement;                    
+      66 +        handcuffsConsumed = 0;                                 
+      67 +        transform.position = recyclePos;                       
+      68 +        queueTarget = recyclePos;                              
+      69 +        isWalking = false;                                     
+      70 +                                                               
+      71 +        onRecycled?.Invoke();                                  
+      72      }
+      73  }
+
+⏺ Write(Assets/Scripts/Zones/DeskZone.cs)
+  ⎿  Added 37 lines, removed 42 lines
+       8      [SerializeField] MoneyStackZone moneyStackZone;
+       9      [SerializeField] GameObject prisonerPrefab;
+      10      [SerializeField] Transform[] queueSlots;
+      11 -    [SerializeField] Transform jailDirection;                  
+      11 +    [SerializeField] Transform jailExit;          // 수감자 퇴 
+         +장 방향 기준점                                                 
+      12  
+      13      [Header("Tuning")]
+      14      [SerializeField] float consumeInterval = 0.3f;
+      15      [SerializeField] int moneyPerPrisoner = 1;
+      16 -    [SerializeField] int maxQueueSize = 5;                     
+      16  
+      17 +    // queueSlots 길이만큼 수감자 고정 풀로 운영               
+      18      readonly List<PrisonerNPC> queue = new List<PrisonerNPC>();
+      19      Coroutine processRoutine;
+      20  
+      21      void Start()
+      22      {
+      23 -        for (int i = 0; i < maxQueueSize; i++)                 
+      24 -            SpawnPrisoner();                                   
+      23 +        // 슬롯 수만큼 수감자를 각 슬롯 위치에 바로 생성       
+      24 +        for (int i = 0; i < queueSlots.Length; i++)            
+      25 +        {                                                      
+      26 +            PrisonerNPC npc = CreatePrisonerNPC();             
+      27 +            npc.Initialize(Random.Range(2, 5), queueSlots[i].po
+         +sition);                                                       
+      28 +            queue.Add(npc);                                    
+      29 +        }                                                      
+      30      }
+      31  
+      32      protected override void OnPlayerEnter()
+     ...
+       51              }
+       52  
+       53              PrisonerNPC front = queue[0];
+       49 -            if (front == null) { queue.RemoveAt(0); continue; 
+          -}                                                             
+       54  
+       51 -            // Consume handcuffs one by one until prisoner is 
+          -fully processed                                               
+       52 -            while (!front.IsFullyProcessed && inventory.Handcu
+          -ffCount > 0)                                                  
+       55 +            // 수갑 하나씩 소비 (수갑 부족하면 대기)          
+       56 +            while (!front.IsFullyProcessed)                   
+       57              {
+       54 -                GameObject handcuffVisual = inventory.RemoveTo
+          -pHandcuff();                                                  
+       55 -                if (handcuffVisual != null) Destroy(handcuffVi
+          -sual);                                                        
+       58 +                if (inventory.HandcuffCount == 0) { yield retu
+          +rn new WaitForSeconds(0.2f); continue; }                      
+       59 +                GameObject vis = inventory.RemoveTopHandcuff()
+          +;                                                             
+       60 +                if (vis != null) Destroy(vis);                
+       61                  front.ConsumeHandcuff();
+       62                  yield return new WaitForSeconds(consumeInterva
+           l);
+       63              }
+       64  
+       60 -            if (!front.IsFullyProcessed) continue;            
+       61 -                                                              
+       62 -            // Process complete                               
+       65 +            // --- 처리 완료 ---                              
+       66              queue.RemoveAt(0);
+       64 -            Vector3 exitDir = jailDirection != null ? (jailDir
+          -ection.position - front.transform.position).normalized : Vecto
+          -r3.forward;                                                   
+       65 -            front.LeaveToJail(exitDir);                       
+       67  
+       67 -            // Money counter increases HERE (not at MoneyStack
+          -Zone pickup)                                                  
+       68 +            // 나머지 수감자들 한 칸씩 전진                   
+       69 +            for (int i = 0; i < queue.Count && i < queueSlots.
+          +Length; i++)                                                  
+       70 +                queue[i].MoveToQueuePosition(queueSlots[i].pos
+          +ition);                                                       
+       71 +                                                              
+       72 +            // 돈 처리 (카운터는 여기서 증가)                 
+       73              GameManager.Instance.AddMoney(moneyPerPrisoner);
+       74 +            moneyStackZone?.AddMoney(SpawnMoneyVisual(transfor
+          +m.position));                                                 
+       75  
+       70 -            if (moneyStackZone != null)                       
+       71 -                moneyStackZone.AddMoney(SpawnMoneyVisual(trans
+          -form.position));                                              
+       76 +            // 퇴장 후 마지막 슬롯으로 재사용                 
+       77 +            int lastSlot = queueSlots.Length - 1;             
+       78 +            Vector3 exitDir = jailExit != null                
+       79 +                ? (jailExit.position - front.transform.positio
+          +n).normalized                                                 
+       80 +                : Vector3.right;                              
+       81  
+       73 -            AdvanceQueue();                                   
+       74 -            SpawnPrisoner();                                  
+       82 +            front.LeaveAndRecycle(exitDir, queueSlots[lastSlot
+          +].position, Random.Range(2, 5), () =>                         
+       83 +            {                                                 
+       84 +                queue.Add(front);                             
+       85 +                front.MoveToQueuePosition(queueSlots[lastSlot]
+          +.position);                                                   
+       86 +            });                                               
+       87  
+       88              yield return new WaitForSeconds(0.3f);
+       89          }
+       90      }
+       91  
+       80 -    void AdvanceQueue()                                       
+       92 +    PrisonerNPC CreatePrisonerNPC()                           
+       93      {
+       82 -        for (int i = 0; i < queue.Count && i < queueSlots.Leng
+          -th; i++)                                                      
+       83 -        {                                                     
+       84 -            if (queue[i] != null)                             
+       85 -                queue[i].MoveToQueuePosition(queueSlots[i].pos
+          -ition);                                                       
+       86 -        }                                                     
+       87 -    }                                                         
+       88 -                                                              
+       89 -    void SpawnPrisoner()                                      
+       90 -    {                                                         
+       91 -        int slot = queue.Count;                               
+       92 -        if (slot >= maxQueueSize || slot >= queueSlots.Length)
+          - return;                                                      
+       93 -                                                              
+       94          GameObject go = prisonerPrefab != null
+       95              ? Instantiate(prisonerPrefab)
+       96 -            : CreateDefaultPrisoner();                        
+       96 +            : CreateDefaultVisual();                          
+       97  
+       98 -        PrisonerNPC npc = go.GetComponent<PrisonerNPC>();     
+       99 -        if (npc == null) npc = go.AddComponent<PrisonerNPC>();
+      100 -                                                              
+      101 -        Vector3 spawnPos = queueSlots[slot].position + Vector3
+          -.back * 5f;                                                   
+      102 -        npc.Initialize(Random.Range(2, 5), spawnPos);         
+      103 -        npc.MoveToQueuePosition(queueSlots[slot].position);   
+      104 -        queue.Add(npc);                                       
+       98 +        PrisonerNPC npc = go.GetComponent<PrisonerNPC>() ?? go
+          +.AddComponent<PrisonerNPC>();                                 
+       99 +        return npc;                                           
+      100      }
+      101  
+      107 -    GameObject CreateDefaultPrisoner()                        
+      102 +    GameObject CreateDefaultVisual()                          
+      103      {
+      104          var root = new GameObject("Prisoner");
+      105          var body = GameObject.CreatePrimitive(PrimitiveType.Ca
+           psule);
+      106          body.transform.SetParent(root.transform);
+      107          body.transform.localPosition = Vector3.zero;
+      113 -        body.transform.localScale = new Vector3(0.5f, 0.5f, 0.
+          -5f);                                                          
+      108 +        body.transform.localScale = Vector3.one * 0.5f;       
+      109          body.GetComponent<Renderer>().material.color = new Col
+           or(1f, 0.5f, 0f);
+      110          Destroy(body.GetComponent<Collider>());
+      111          return root;
+
+⏺ 이제 조이스틱을 재작성합니다.
+
+⏺ Write(Assets/Scripts/UI/VirtualJoystick.cs)
+  ⎿  Added 37 lines, removed 14 lines
+       1  using UnityEngine;
+       2  using UnityEngine.EventSystems;
+       3  
+       4 +// 터치한 자리에 핸들이 나타나고, 드래그로 이동 방향을 결정하는
+         + 조이스틱                                                      
+       5 +// Canvas 직계 자식인 Handle Image 하나만 필요 (배경 이미지 불 
+         +필요)                                                          
+       6  public class VirtualJoystick : MonoBehaviour, IPointerDownHandl
+          er, IDragHandler, IPointerUpHandler
+       7  {
+       6 -    [SerializeField] RectTransform background;                 
+       7 -    [SerializeField] RectTransform handle;                     
+       8 -    [SerializeField] float radius = 50f;                       
+       8 +    [SerializeField] RectTransform handle;   // Canvas 직계 자 
+         +식 Image                                                       
+       9 +    [SerializeField] float radius = 80f;     // 핸들 최대 이동 
+         +반경 (px, 기준 해상도 기준)                                    
+      10  
+      11 +    Canvas rootCanvas;                                         
+      12 +    Vector2 touchStartScreenPos;                               
+      13 +                                                               
+      14      public Vector2 Direction { get; private set; }
+      15  
+      12 -    public void OnPointerDown(PointerEventData eventData) => Up
+         -dateHandle(eventData);                                         
+      16 +    void Awake()                                               
+      17 +    {                                                          
+      18 +        rootCanvas = GetComponentInParent<Canvas>();           
+      19 +        if (handle != null) handle.gameObject.SetActive(false);
+      20 +    }                                                          
+      21  
+      14 -    public void OnDrag(PointerEventData eventData) => UpdateHan
+         -dle(eventData);                                                
+      22 +    public void OnPointerDown(PointerEventData eventData)      
+      23 +    {                                                          
+      24 +        touchStartScreenPos = eventData.position;              
+      25 +        if (handle != null) handle.gameObject.SetActive(true); 
+      26 +        PlaceHandle(eventData.position);                       
+      27 +        Direction = Vector2.zero;                              
+      28 +    }                                                          
+      29  
+      30 +    public void OnDrag(PointerEventData eventData)             
+      31 +    {                                                          
+      32 +        Vector2 delta = eventData.position - touchStartScreenPo
+         +s;                                                             
+      33 +        Vector2 clamped = Vector2.ClampMagnitude(delta, radius)
+         +;                                                              
+      34 +        PlaceHandle(touchStartScreenPos + clamped);            
+      35 +        Direction = clamped / radius;                          
+      36 +    }                                                          
+      37 +                                                               
+      38      public void OnPointerUp(PointerEventData eventData)
+      39      {
+      18 -        handle.localPosition = Vector2.zero;                   
+      40 +        if (handle != null) handle.gameObject.SetActive(false);
+      41          Direction = Vector2.zero;
+      42      }
+      43  
+      22 -    void UpdateHandle(PointerEventData eventData)              
+      44 +    // 스크린 좌표 → Canvas 월드 좌표로 핸들 배치 (부모 무관하 
+         +게 정확히 위치함)                                              
+      45 +    void PlaceHandle(Vector2 screenPos)                        
+      46      {
+      24 -        if (!RectTransformUtility.ScreenPointToLocalPointInRect
+         -angle(                                                         
+      25 -                background, eventData.position, eventData.press
+         -EventCamera, out Vector2 local))                               
+      26 -            return;                                            
+      27 -                                                               
+      28 -        Vector2 clamped = Vector2.ClampMagnitude(local, radius)
+         -;                                                              
+      29 -        handle.localPosition = clamped;                        
+      30 -        Direction = clamped / radius;                          
+      47 +        if (handle == null || rootCanvas == null) return;      
+      48 +        Camera cam = rootCanvas.renderMode == RenderMode.Screen
+         +SpaceOverlay ? null : rootCanvas.worldCamera;                  
+      49 +        if (RectTransformUtility.ScreenPointToWorldPointInRecta
+         +ngle(                                                          
+      50 +                (RectTransform)rootCanvas.transform, screenPos,
+         + cam, out Vector3 worldPos))                                   
+      51 +        {                                                      
+      52 +            handle.position = worldPos;                        
+      53 +        }                                                      
+      54      }
+      55  }
+
+⏺ ---
+  변경 사항 요약
+
+  수감자 시스템 (DeskZone + PrisonerNPC)
+
+  - Start()에서 슬롯 수만큼 수감자를 슬롯 위치에 바로 생성 (줄 세우기 이동 없음)
+  - 처리 흐름:
+  slot 0 처리 완료
+    → queue[1] 이 slot 0 위치로 이동
+    → queue[2] 이 slot 1 위치로 이동
+    → 처리된 수감자: 퇴장 애니 → 마지막 슬롯 위치로 순간이동 → queue 끝에 재추가
+  - 새 GameObject를 만들지 않으므로 GC 부담 없음
+
+  조이스틱 (VirtualJoystick)
+
+  ┌────────┬──────────────────────┬────────────────────────────────┐
+  │        │         이전         │              이후              │
+  ├────────┼──────────────────────┼────────────────────────────────┤
+  │ 구조   │ Background + Handle  │ Handle 하나만                  │
+  ├────────┼──────────────────────┼────────────────────────────────┤
+  │ 터치   │ 고정 위치            │ 터치한 자리에 핸들 등장        │
+  ├────────┼──────────────────────┼────────────────────────────────┤
+  │ 드래그 │ Background 중심 기준 │ 터치 시작점 기준으로 방향 계산 │
+  └────────┴──────────────────────┴────────────────────────────────┘
+
+  Canvas 설정 변경:
+  Canvas
+  ├── JoystickArea  ← 전체화면 투명 Image (alpha=0), VirtualJoystick.cs
+  │                   GraphicRaycaster 필수 (Canvas에 있으면 됨)
+  ├── Handle        ← Canvas 직계 자식, Image (원형), 80×80
+  │                   VirtualJoystick의 Handle 필드에 연결
+  └── MoneyPanel
+      └── MoneyText
+
+  JailExit Transform도 Inspector에서 연결해야 합니다 — 수감자가 걸어갈 방향의 빈
+   오브젝트입니다.
+
+✻ Cooked for 2m 35s
+
+※ recap: Prison Life 모바일 아이들 게임의 CoreLoop 스크립트 21개를 완성했습니다. 다음 단계는 Unity Editor에서 씬 세팅 및 플레이 테스트입니다.
+
+❯ 터치가 안 돼. 그리고 수감자들이 queueSlot이 아닌 0,0,0 위치에 생성 돼.        
+
+⏺ 두 버그를 분석합니다.
+
+  1. 터치 안 됨 → JoystickArea에 Image(Raycast Target) 컴포넌트가 없으면
+  이벤트를 못 받음. VirtualJoystick이 자동으로 세팅하도록 변경
+  2. 수감자 0,0,0 → new GameObject()는 활성 상태로 생성되어 Initialize() 전 한
+  프레임 (0,0,0)에서 렌더링됨. 생성 직후 비활성화 → 위치 설정 → 활성화 순서로
+  수정
+⏺ Write(Assets/Scripts/UI/VirtualJoystick.cs)
+  ⎿  Added 26 lines, removed 7 lines
+       1  using UnityEngine;
+       2  using UnityEngine.EventSystems;
+       3 +using UnityEngine.UI;                                          
+       4  
+       4 -// 터치한 자리에 핸들이 나타나고, 드래그로 이동 방향을 결정하는
+         - 조이스틱                                                      
+       5 -// Canvas 직계 자식인 Handle Image 하나만 필요 (배경 이미지 불 
+         -필요)                                                          
+       5 +// 터치한 자리에 핸들이 나타나고 드래그로 이동 방향을 결정하는 
+         +조이스틱.                                                      
+       6 +// 이 스크립트가 붙은 오브젝트는 Canvas 직계 자식이어야 합니다.
+       7 +// Handle은 Canvas 직계 자식 Image 오브젝트를 Inspector에서 연 
+         +결하세요.                                                      
+       8  public class VirtualJoystick : MonoBehaviour, IPointerDownHandl
+          er, IDragHandler, IPointerUpHandler
+       9  {
+       8 -    [SerializeField] RectTransform handle;   // Canvas 직계 자 
+         -식 Image                                                       
+       9 -    [SerializeField] float radius = 80f;     // 핸들 최대 이동 
+         -반경 (px, 기준 해상도 기준)                                    
+      10 +    [SerializeField] RectTransform handle;                     
+      11 +    [SerializeField] float radius = 80f;                       
+      12  
+      13      Canvas rootCanvas;
+      14 +    RectTransform rootCanvasRect;                              
+      15      Vector2 touchStartScreenPos;
+      16  
+      17      public Vector2 Direction { get; private set; }
+     ...
+      19      void Awake()
+      20      {
+      21          rootCanvas = GetComponentInParent<Canvas>();
+      22 +        rootCanvasRect = rootCanvas.GetComponent<RectTransform>
+         +();                                                            
+      23 +                                                               
+      24 +        // 터치 수신을 위해 투명 Image가 반드시 필요함         
+      25 +        // Inspector에서 직접 추가하지 않아도 자동으로 세팅    
+      26 +        var img = GetComponent<Image>();                       
+      27 +        if (img == null) img = gameObject.AddComponent<Image>()
+         +;                                                              
+      28 +        img.color = new Color(0f, 0f, 0f, 0f);                 
+      29 +        img.raycastTarget = true;                              
+      30 +                                                               
+      31 +        // Canvas 전체를 덮도록 RectTransform 자동 설정        
+      32 +        var rt = GetComponent<RectTransform>();                
+      33 +        rt.anchorMin = Vector2.zero;                           
+      34 +        rt.anchorMax = Vector2.one;                            
+      35 +        rt.offsetMin = Vector2.zero;                           
+      36 +        rt.offsetMax = Vector2.zero;                           
+      37 +                                                               
+      38          if (handle != null) handle.gameObject.SetActive(false);
+      39      }
+      40  
+     ...
+      60          Direction = Vector2.zero;
+      61      }
+      62  
+      44 -    // 스크린 좌표 → Canvas 월드 좌표로 핸들 배치 (부모 무관하 
+         -게 정확히 위치함)                                              
+      63 +    // 스크린 좌표 → 핸들 월드 위치 변환 (핸들의 부모 계층 무관
+         +하게 정확히 배치)                                              
+      64      void PlaceHandle(Vector2 screenPos)
+      65      {
+      47 -        if (handle == null || rootCanvas == null) return;      
+      66 +        if (handle == null) return;                            
+      67          Camera cam = rootCanvas.renderMode == RenderMode.Screen
+          SpaceOverlay ? null : rootCanvas.worldCamera;
+      68          if (RectTransformUtility.ScreenPointToWorldPointInRecta
+          ngle(
+      50 -                (RectTransform)rootCanvas.transform, screenPos,
+         - cam, out Vector3 worldPos))                                   
+      69 +                rootCanvasRect, screenPos, cam, out Vector3 wor
+         +ldPos))                                                        
+      70          {
+      71              handle.position = worldPos;
+      72          }
+
+⏺ Write(Assets/Scripts/NPC/PrisonerNPC.cs)
+  ⎿  Added 13 lines, removed 10 lines
+      15      public bool IsFullyProcessed => handcuffsConsumed >= Requir
+          edHandcuffs;
+      16      public int Remaining => Mathf.Max(0, RequiredHandcuffs - ha
+          ndcuffsConsumed);
+      17  
+      18 +    // SetActive 호출 없음 — 호출부(DeskZone)에서 활성 상태를  
+         +직접 관리                                                      
+      19      public void Initialize(int required, Vector3 pos)
+      20      {
+      21          RequiredHandcuffs = required;
+     ...
+      23          transform.position = pos;
+      24          queueTarget = pos;
+      25          isWalking = false;
+      25 -        gameObject.SetActive(true);                            
+      26      }
+      27  
+      28 -    // 처리 완료 후 재사용: 퇴장 애니 → 마지막 슬롯으로 순간이 
+         -동 → 콜백                                                      
+      29 -    public void LeaveAndRecycle(Vector3 exitDir, Vector3 recycl
+         -ePos, int newRequirement, Action onRecycled)                   
+      30 -    {                                                          
+      31 -        isWalking = false;                                     
+      32 -        StartCoroutine(LeaveRoutine(exitDir, recyclePos, newReq
+         -uirement, onRecycled));                                        
+      33 -    }                                                          
+      34 -                                                               
+      28      public void ConsumeHandcuff() => handcuffsConsumed++;
+      29  
+      30      public void MoveToQueuePosition(Vector3 pos)
+     ...
+      33          isWalking = true;
+      34      }
+      35  
+      36 +    // 퇴장 → 마지막 슬롯으로 재사용                           
+      37 +    public void LeaveAndRecycle(Vector3 exitDir, Vector3 recycl
+         +ePos, int newRequirement, Action onRecycled)                   
+      38 +    {                                                          
+      39 +        isWalking = false;                                     
+      40 +        StartCoroutine(LeaveRoutine(exitDir, recyclePos, newReq
+         +uirement, onRecycled));                                        
+      41 +    }                                                          
+      42 +                                                               
+      43      void Update()
+      44      {
+      45          if (!isWalking) return;
+     ...
+      53  
+      54      IEnumerator LeaveRoutine(Vector3 exitDir, Vector3 recyclePo
+          s, int newRequirement, Action onRecycled)
+      55      {
+      56 -        // 감옥 방향으로 걸어서 퇴장                           
+      56 +        // 감옥 방향으로 퇴장                                  
+      57          Vector3 exitTarget = transform.position + exitDir.norma
+          lized * 8f;
+      58          while (Vector3.Distance(transform.position, exitTarget)
+           > 0.1f)
+      59          {
+     ...
+      61              yield return null;
+      62          }
+      63  
+      64 -        // 마지막 슬롯으로 순간이동 후 재초기화                
+      64 +        // 텔레포트 중 깜빡임 방지                             
+      65 +        gameObject.SetActive(false);                           
+      66 +                                                               
+      67          RequiredHandcuffs = newRequirement;
+      68          handcuffsConsumed = 0;
+      69          transform.position = recyclePos;
+      70          queueTarget = recyclePos;
+      71          isWalking = false;
+      72  
+      73 +        gameObject.SetActive(true);                            
+      74          onRecycled?.Invoke();
+      75      }
+      76  }
+
+⏺ Update(Assets/Scripts/Zones/DeskZone.cs)
+  ⎿  Added 3 lines, removed 1 line
+      20  
+      21      void Start()
+      22      {
+      23 -        // 슬롯 수만큼 수감자를 각 슬롯 위치에 바로 생성       
+      23 +        // 비활성 상태로 생성 → 위치 초기화 → 활성화 (0,0,0에서
+         + 한 프레임 렌더링되는 현상 방지)                               
+      24          for (int i = 0; i < queueSlots.Length; i++)
+      25          {
+      26              PrisonerNPC npc = CreatePrisonerNPC();
+      27 +            npc.gameObject.SetActive(false);                   
+      28              npc.Initialize(Random.Range(2, 5), queueSlots[i].po
+          sition);
+      29 +            npc.gameObject.SetActive(true);                    
+      30              queue.Add(npc);
+      31          }
+      32      }
+
+⏺ ---
+  수정 요약
+
+  VirtualJoystick — 터치 수신 자동 세팅
+
+  Awake에서 직접 처리하므로 Inspector 설정 없이 동작합니다:
+  - Image 컴포넌트가 없으면 자동 추가 (투명, RaycastTarget=true)
+  - RectTransform을 Canvas 전체 크기로 자동 확장
+
+  Canvas 설정은 이것만 하면 됩니다:
+  Canvas
+  ├── JoystickArea   ← 빈 오브젝트 + VirtualJoystick.cs + Handle 필드 연결
+  └── Handle         ← Canvas 직계 자식 Image (원형, 80×80)
+
+  DeskZone + PrisonerNPC — 0,0,0 생성 방지
+
+  기존: 생성(0,0,0 활성) → Initialize(위치설정)  ← 한 프레임 0,0,0에서 보임
+  수정: 생성 → SetActive(false) → Initialize(위치설정) → SetActive(true)
+
+  재사용(recycle) 시 텔레포트할 때도 동일하게 SetActive(false) → 이동 → 
+  SetActive(true) 처리해서 깜빡임을 막습니다.
+
+✻ Cogitated for 3m 1s
+
+※ recap: Prison Life Unity 모바일 게임 CoreLoop 구현 중. 조이스틱 터치 버그와 수감자 0,0,0 생성 버그를 수정했으며, 다음은 Unity Editor에서 실행하여 동작을 확인하면 됩니다.
+
+❯ prisoner에서 CreateDefaultVisual를 하는 이유?                                 
+
+⏺ prisonerPrefab이 Inspector에서 비어 있을 때를 대비한 개발용 폴백입니다. 프리팹
+   없이도 실행이 가능하도록 주황색 캡슐을 코드로 생성하는 것이고, 실제로
+  프리팹을 연결하면 절대 호출되지 않습니다.
+
+  프리팹을 쓸 계획이라면 제거하고 필수 검사로 바꾸는 게 깔끔합니다.
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(Assets/Scripts/Zones/DeskZone.cs)
+  ⎿  Added 7 lines, removed 18 lines
+       93  
+       94      PrisonerNPC CreatePrisonerNPC()
+       95      {
+       96 -        GameObject go = prisonerPrefab != null                
+       97 -            ? Instantiate(prisonerPrefab)                     
+       98 -            : CreateDefaultVisual();                          
+       99 -                                                              
+      100 -        PrisonerNPC npc = go.GetComponent<PrisonerNPC>() ?? go
+          -.AddComponent<PrisonerNPC>();                                 
+      101 -        return npc;                                           
+       96 +        if (prisonerPrefab == null)                           
+       97 +        {                                                     
+       98 +            Debug.LogError("[DeskZone] prisonerPrefab이 비어  
+          +있습니다. Inspector에서 연결해 주세요.", this);               
+       99 +            return null;                                      
+      100 +        }                                                     
+      101 +        GameObject go = Instantiate(prisonerPrefab);          
+      102 +        return go.GetComponent<PrisonerNPC>() ?? go.AddCompone
+          +nt<PrisonerNPC>();                                            
+      103      }
+      104  
+      104 -    GameObject CreateDefaultVisual()                          
+      105 -    {                                                         
+      106 -        var root = new GameObject("Prisoner");                
+      107 -        var body = GameObject.CreatePrimitive(PrimitiveType.Ca
+          -psule);                                                       
+      108 -        body.transform.SetParent(root.transform);             
+      109 -        body.transform.localPosition = Vector3.zero;          
+      110 -        body.transform.localScale = Vector3.one * 0.5f;       
+      111 -        body.GetComponent<Renderer>().material.color = new Col
+          -or(1f, 0.5f, 0f);                                             
+      112 -        Destroy(body.GetComponent<Collider>());               
+      113 -        return root;                                          
+      114 -    }                                                         
+      115 -                                                              
+      105      GameObject SpawnMoneyVisual(Vector3 pos)
+      106      {
+      107          return CreatePrimitive(PrimitiveType.Cube, new Vector3
+           (0.18f, 0.08f, 0.25f), new Color(0.1f, 0.8f, 0.2f));
+
+⏺ null 반환 가능성도 생겼으니 Start()에서 방어 처리를 추가합니다.
+
+⏺ Update(Assets/Scripts/Zones/DeskZone.cs)
+  ⎿  Added 1 line
+      24          for (int i = 0; i < queueSlots.Length; i++)
+      25          {
+      26              PrisonerNPC npc = CreatePrisonerNPC();
+      27 +            if (npc == null) return;                           
+      28              npc.gameObject.SetActive(false);
+      29              npc.Initialize(Random.Range(2, 5), queueSlots[i].po
+          sition);
+      30              npc.gameObject.SetActive(true);
+
+⏺ CreateDefaultVisual()을 제거했습니다. 이제 prisonerPrefab이 비어 있으면 콘솔에
+   명확한 에러 메시지가 출력됩니다. Inspector에서 Prisoner 프리팹을 반드시
+  연결해야 합니다.
+
+✻ Cooked for 27s
+
+※ recap: Prison Life 모바일 아이들 게임의 CoreLoop 스크립트를 작성 중입니다. 현재 조이스틱 터치와 수감자 스폰 버그를 수정했고, 다음 단계는 Unity Editor에서 Prisoner 프리팹을 만들어 DeskZone에 연결하는 것입니다.
+
+❯ npc 생성 시 position.y = 1로 해줘                                             
+
+⏺ Update(Assets/Scripts/Zones/DeskZone.cs)
+  ⎿  Added 3 lines, removed 1 line
+      26              PrisonerNPC npc = CreatePrisonerNPC();
+      27              if (npc == null) return;
+      28              // npc.gameObject.SetActive(false);
+      29 -            npc.Initialize(Random.Range(2, 5), queueSlots[i].po
+         -sition);                                                       
+      29 +            Vector3 spawnPos = queueSlots[i].position;         
+      30 +            spawnPos.y = 1f;                                   
+      31 +            npc.Initialize(Random.Range(2, 5), spawnPos);      
+      32              npc.gameObject.SetActive(true);
+      33              queue.Add(npc);
+      34          }
+
+⏺ 재사용(recycle) 시에도 동일하게 적용합니다.
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(Assets/Scripts/Zones/DeskZone.cs)
+  ⎿  Added 3 lines, removed 1 line
+      84                  ? (jailExit.position - front.transform.position
+          ).normalized
+      85                  : Vector3.right;
+      86  
+      87 -            front.LeaveAndRecycle(exitDir, queueSlots[lastSlot]
+         -.position, Random.Range(2, 5), () =>                           
+      87 +            Vector3 recyclePos = queueSlots[lastSlot].position;
+      88 +            recyclePos.y = 1f;                                 
+      89 +            front.LeaveAndRecycle(exitDir, recyclePos, Random.R
+         +ange(2, 5), () =>                                              
+      90              {
+      91                  queue.Add(front);
+      92                  front.MoveToQueuePosition(queueSlots[lastSlot].
+          position);
+
+⏺ queue 이동 시(MoveToQueuePosition)도 Y=1로 맞춥니다.
+
+⏺ Update(Assets/Scripts/Zones/DeskZone.cs)
+  ⎿  Added 5 lines, removed 1 line
+      72  
+      73              // 나머지 수감자들 한 칸씩 전진
+      74              for (int i = 0; i < queue.Count && i < queueSlots.L
+          ength; i++)
+      75 -                queue[i].MoveToQueuePosition(queueSlots[i].posi
+         -tion);                                                         
+      75 +            {                                                  
+      76 +                Vector3 slotPos = queueSlots[i].position;      
+      77 +                slotPos.y = 1f;                                
+      78 +                queue[i].MoveToQueuePosition(slotPos);         
+      79 +            }                                                  
+      80  
+      81              // 돈 처리 (카운터는 여기서 증가)
+      82              GameManager.Instance.AddMoney(moneyPerPrisoner);
+
+⏺ 생성, 재사용(recycle), 큐 이동 세 곳 모두 Y=1로 통일했습니다.
+
+✻ Brewed for 20s
+
+❯ 카메라 rotation이 54, -45, 0으로 되어있어서 조이스틱 방향이랑 플레이어        
+  움직임이 어색해보여                                                           
+
+⏺ 카메라 Y축이 -45도 회전되어 있어서, 조이스틱 "위"(화면 위쪽)가 월드 Z+를
+  가리키지 않습니다. 조이스틱 입력을 카메라 기준 방향으로 변환해야 합니다.
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(Assets/Scripts/Player/PlayerController.cs)
+  ⎿  Added 1 line
+       5  {
+       6      [SerializeField] float moveSpeed = 5f;
+       7      [SerializeField] VirtualJoystick joystick;
+       8 +    [SerializeField] Camera gameCamera;  // 카메라 기준 방향 계
+         +산에 사용                                                      
+       9  
+      10      Rigidbody rb;
+      11      bool autoMoving;
+⏺ Update(Assets/Scripts/Player/PlayerController.cs)
+  ⎿  Added 1 line
+      20          rb = GetComponent<Rigidbody>();
+      21          rb.freezeRotation = true;
+      22          rb.interpolation = RigidbodyInterpolation.Interpolate;
+      23 +        if (gameCamera == null) gameCamera = Camera.main;      
+      24      }
+      25  
+      26      void FixedUpdate()
+
+⏺ Update(Assets/Scripts/Player/PlayerController.cs)
+  ⎿  Added 9 lines, removed 1 line
+      57      void HandleJoystickMove()
+      58      {
+      59          Vector2 input = joystick != null ? joystick.Direction :
+           Vector2.zero;
+      60 -        Vector3 dir = new Vector3(input.x, 0f, input.y);       
+      60 +                                                               
+      61 +        // 조이스틱 입력을 카메라 기준 월드 방향으로 변환      
+      62 +        // 카메라 Y 회전(-45도 등)에 관계없이 화면 위 = 캐릭터 
+         +전진으로 동작                                                  
+      63 +        Vector3 camForward = gameCamera.transform.forward;     
+      64 +        Vector3 camRight   = gameCamera.transform.right;       
+      65 +        camForward.y = 0f; camForward.Normalize();             
+      66 +        camRight.y   = 0f; camRight.Normalize();               
+      67 +                                                               
+      68 +        Vector3 dir = camForward * input.y + camRight * input.x
+         +;                                                              
+      69          rb.velocity = new Vector3(dir.x * moveSpeed, rb.velocit
+          y.y, dir.z * moveSpeed);
+      70  
+      71          if (dir.sqrMagnitude > 0.01f)
+
+⏺ ---
+  원인: 조이스틱 "위"(input.y = 1)가 그대로 월드 Z+로 해석됐지만, 카메라가 Y축
+  -45도 회전되어 있어 화면에서 보이는 "앞"은 월드 대각선 방향이었습니다.
+
+  수정 내용: 조이스틱 입력을 카메라의 forward/right 벡터 기준으로 변환합니다.
+
+  조이스틱 위  → camForward (화면에서 보이는 앞 방향)
+  조이스틱 우  → camRight   (화면에서 보이는 오른쪽 방향)
+
+  gameCamera 필드는 비워두면 Camera.main을 자동으로 사용합니다. Inspector에서
+  직접 연결해도 됩니다.
+
+✻ Sautéed for 35s
+
+❯ player animator 설정하기. 모션은 곡괭이 오브젝트를 내려치는 걸로 만들 예정임. 
+   또한 플레이어가 이동하는 방향으로 회전해야 함.                               
+
+⏺ 두 가지를 처리합니다. 먼저 회전 코드를 rb.MoveRotation으로 변경하고
+  (Rigidbody가 있을 때 transform.rotation 직접 설정은 물리 충돌 유발 가능), 그
+  다음 Animator 설정 방법을 안내합니다.
+
+⏺ Update(Assets/Scripts/Player/PlayerController.cs)
+  ⎿  Added 3 lines, removed 1 line
+      81  
+      82      void RotateToward(Vector3 dir)
+      83      {
+      84 -        transform.rotation = Quaternion.Slerp(transform.rotatio
+         -n, Quaternion.LookRotation(dir), 0.15f);                       
+      84 +        if (dir.sqrMagnitude < 0.001f) return;                 
+      85 +        Quaternion target = Quaternion.LookRotation(dir);      
+      86 +        rb.MoveRotation(Quaternion.Slerp(rb.rotation, target, 1
+         +2f * Time.fixedDeltaTime));                                    
+      87      }
+      88  
+      89      public void SetAutoMove(Vector3 target, System.Action callb
+          ack, float stopDist = 0.5f)
+
+⏺ ---
+  Animator 설정 방법
+
+  1단계 — 플레이어 계층구조에 곡괭이 추가
+
+  Player
+  ├── Body        (Capsule)
+  ├── Head        (Sphere)
+  └── ArmPivot    ← 빈 오브젝트, 어깨 위치로 이동 (예: 0, 0.3, 0.3)
+      └── Pickaxe ← Cylinder, Scale (0.07, 0.4, 0.07), 색상 갈색
+
+  ArmPivot의 위치를 플레이어 어깨 쯤으로 맞추세요. 애니메이션은 ArmPivot의 X축
+  회전으로 만듭니다.
+
+  ---
+  2단계 — Animator Controller 생성
+
+  Assets/Animations/ 폴더 생성 후:
+
+  Project 창 우클릭 → Create → Animator Controller → 이름 PlayerAnimator
+
+  Player 루트 오브젝트에 Animator 컴포넌트 추가 → Controller 필드에
+  PlayerAnimator 연결
+
+  ---
+  3단계 — Parameters 추가
+
+  Animator 창 열기 → Parameters 탭:
+
+  ┌───────┬─────────┐
+  │ 이름  │  타입   │
+  ├───────┼─────────┤
+  │ Speed │ Float   │
+  ├───────┼─────────┤
+  │ Mine  │ Trigger │
+  └───────┴─────────┘
+
+  ---
+  4단계 — Animation Clips 생성
+
+  Player 선택 → Window → Animation → Animation 창 열기
+
+  Idle 클립
+
+  - + Create → Idle.anim 저장
+  - 키프레임 없어도 됨 (기본 자세 유지)
+
+  Walk 클립
+
+  - + Create → Walk.anim 저장
+  - ArmPivot 선택 후 Record(●) 켜기
+  - 0:00프레임: ArmPivot Rotation X = -10
+  - 0:15프레임: ArmPivot Rotation X = 10
+  - 0:30프레임: ArmPivot Rotation X = -10
+  - Loop Time ✓
+
+  Mine 클립
+
+  - + Create → Mine.anim 저장
+  - 총 길이 0:30 (0.5초, 60fps 기준)
+  - Record(●) 켜고 ArmPivot 선택:
+
+  ┌────────┬─────────────────────┐
+  │ 프레임 │ ArmPivot Rotation X │
+  ├────────┼─────────────────────┤
+  │ 0:00   │ -20                 │
+  ├────────┼─────────────────────┤
+  │ 0:10   │ 80 (내려침)         │
+  ├────────┼─────────────────────┤
+  │ 0:20   │ -20 (복귀)          │
+  └────────┴─────────────────────┘
+
+  - Loop Time 해제
+
+  ---
+  5단계 — State Machine 구성
+
+  Animator Controller에서:
+
+  [Entry] → [Idle] (기본 상태)
+
+  상태 추가: Idle, Walk, Mine 세 개 생성
+
+  트랜지션 설정:
+
+  ┌───────────┬──────┬────────────────┬────────────────────┐
+  │   From    │  To  │      조건      │   Has Exit Time    │
+  ├───────────┼──────┼────────────────┼────────────────────┤
+  │ Idle      │ Walk │ Speed > 0.1    │ ✗                  │
+  ├───────────┼──────┼────────────────┼────────────────────┤
+  │ Walk      │ Idle │ Speed < 0.1    │ ✗                  │
+  ├───────────┼──────┼────────────────┼────────────────────┤
+  │ Any State │ Mine │ Mine (Trigger) │ ✗                  │
+  ├───────────┼──────┼────────────────┼────────────────────┤
+  │ Mine      │ Idle │ —              │ ✓ (Exit Time: 1.0) │
+  └───────────┴──────┴────────────────┴────────────────────┘
+
+  Mine → Idle 트랜지션: Can Transition To Self 해제
+
+  ---
+  6단계 — PlayerAnimator 컴포넌트 연결
+
+  PlayerAnimator.cs는 Player 루트에 붙입니다 (Animator와 같은 오브젝트).
+
+  Player
+  ├── Animator       ← Controller = PlayerAnimator
+  ├── PlayerAnimator ← 같은 오브젝트에 부착
+  ├── PlayerController
+  └── ...
+
+  현재 PlayerAnimator.cs의 Awake()에서 GetComponent<Animator>()를 사용하므로
+  같은 오브젝트에 있어야 합니다.
+
+  ---
+  7단계 — 확인
+
+  플레이 시:
+  - 이동하면 Walk 상태 → ArmPivot 흔들림
+  - MineZone 진입 → Mine 트리거 → 곡괭이 내려침
+  - 정지하면 Idle 복귀
+  - 이동 방향으로 플레이어 부드럽게 회전
+
+✻ Baked for 1m 12s
+
+※ recap: Prison Life Unity 모바일 게임 CoreLoop 구현 중. 현재 플레이어 Animator Controller 설정 단계이며, 다음은 Unity Editor에서 Idle/Walk/Mine 클립 생성 및 State Machine 연결 작업입니다.
+
+❯ 채굴하는 모션이 끝나는 시점에 플레이어 위치에 가장 가까운 광석 하나가         
+  채굴되어야 해. 업그레이드 하면 도구의 채굴 범위 내의 광석들이 채굴되는 거고.  
+  지금 채굴되는 광석의 위치가 좀 안 맞아.                                       
+
+⏺ 현재 문제 두 가지:
+  1. 광석이 오토무브 목표 위치에서 생성됨 → 플레이어 현재 위치 기준으로 변경
+  2. 업그레이드 레벨 연동 없음 → UpgradeManager.ToolLevel 기반 범위·개수 처리
+
+⏺ Write(Assets/Scripts/Zones/MineZone.cs)
+  ⎿  Added 80 lines, removed 36 lines
+       8      [SerializeField] int gridCols = 8;
+       9      [SerializeField] int gridRows = 12;
+      10      [SerializeField] float oreSpacing = 1f;
+      11 -    [SerializeField] GameObject orePrefab;       // 씬에 배치되
+         -는 광석 프리팹 (미설정 시 기본 구체)                           
+      12 -    [SerializeField] Transform oreParent;        // OreContaine
+         -r 오브젝트 연결 (스케일 1,1,1)                                 
+      11 +    [SerializeField] GameObject orePrefab;                     
+      12 +    [SerializeField] Transform oreParent;                      
+      13  
+      14      [Header("인벤토리 비주얼")]
+      15 -    [SerializeField] GameObject oreVisualPrefab; // 플레이어 등
+         -에 쌓이는 광석 (미설정 시 작은 큐브)                           
+      15 +    [SerializeField] GameObject oreVisualPrefab;               
+      16  
+      17 -    [Header("Tuning")]                                         
+      17 +    [Header("채굴 튜닝")]                                      
+      18      [SerializeField] float mineAnimSeconds = 0.5f;
+      19 +    // 레벨별 채굴 반경 (Lv1 곡괭이 / Lv2 드릴 / Lv3 폭파)     
+      20 +    [SerializeField] float[] harvestRangePerLevel = { 1.2f, 1.8
+         +f, 3.0f };                                                     
+      21 +    // 레벨별 한 번에 채굴되는 최대 광석 수                    
+      22 +    [SerializeField] int[] harvestCountPerLevel  = { 1, 2, 4 };
+      23  
+      24      readonly List<OreItem> ores = new List<OreItem>();
+      25      Coroutine mineLoop;
+      26  
+      23 -    protected override void OnAwake()                          
+      24 -    {                                                          
+      25 -        GenerateOreGrid();                                     
+      26 -    }                                                          
+      27 +    // ── Grid 생성 ──────────────────────────────────────     
+      28  
+      28 -    // BoxCollider bounds 기준으로 월드 좌표에 광석 배치       
+      29 +    protected override void OnAwake() => GenerateOreGrid();    
+      30 +                                                               
+      31      void GenerateOreGrid()
+      32      {
+      33          Collider col = GetComponent<Collider>();
+     ...
+      35              ? col.bounds
+      36              : new Bounds(transform.position, new Vector3(gridCo
+          ls, 1f, gridRows));
+      37  
+      36 -        // 좌하단 기준 + 0.5 spacing 여백으로 시작             
+      38          float startX = bounds.min.x + oreSpacing * 0.5f;
+      39          float startZ = bounds.min.z + oreSpacing * 0.5f;
+      39 -        // Zone Y 상단 + 약간 위 (바닥 위에 올라오도록)        
+      40 -        float oreY = bounds.max.y + 0.25f;                     
+      40 +        float oreY   = bounds.max.y + 0.25f;                   
+      41  
+      42 -        // oreParent 미설정 시 MineZone의 부모를 사용 (씬 루트)
+      43 -        Transform parent = oreParent != null ? oreParent : (tra
+         -nsform.parent != null ? transform.parent : transform);         
+      42 +        Transform parent = oreParent != null                   
+      43 +            ? oreParent                                        
+      44 +            : (transform.parent != null ? transform.parent : tr
+         +ansform);                                                      
+      45  
+      46          for (int row = 0; row < gridRows; row++)
+      47          {
+      48              for (int col2 = 0; col2 < gridCols; col2++)
+      49              {
+      49 -                Vector3 pos = new Vector3(                     
+      50 -                    startX + col2 * oreSpacing,                
+      51 -                    oreY,                                      
+      52 -                    startZ + row * oreSpacing                  
+      53 -                );                                             
+      50 +                Vector3 pos = new Vector3(startX + col2 * oreSp
+         +acing, oreY, startZ + row * oreSpacing);                       
+      51  
+      52                  GameObject go = orePrefab != null
+      53                      ? Instantiate(orePrefab, pos, Quaternion.Eu
+          ler(0f, Random.Range(0f, 360f), 0f), parent)
+      54                      : CreateSceneOre(pos, parent);
+      55  
+      59 -                OreItem item = go.GetComponent<OreItem>();     
+      60 -                if (item == null) item = go.AddComponent<OreIte
+         -m>();                                                          
+      56 +                OreItem item = go.GetComponent<OreItem>() ?? go
+         +.AddComponent<OreItem>();                                      
+      57                  ores.Add(item);
+      58              }
+      59          }
+      60      }
+      61  
+      66 -    // 씬 광석 기본 비주얼: 불규칙한 크기의 어두운 구체 (인벤토
+         -리 큐브와 구분)                                                
+      62      static GameObject CreateSceneOre(Vector3 pos, Transform par
+          ent)
+      63      {
+      64          var go = GameObject.CreatePrimitive(PrimitiveType.Spher
+          e);
+     ...
+      68          go.transform.localScale = new Vector3(
+      69              Random.Range(0.45f, 0.65f),
+      70              Random.Range(0.38f, 0.55f),
+      76 -            Random.Range(0.45f, 0.65f)                         
+      77 -        );                                                     
+      71 +            Random.Range(0.45f, 0.65f));                       
+      72          go.GetComponent<Renderer>().material.color = new Color(
+          0.18f, 0.18f, 0.18f);
+      73          return go;
+      74      }
+      75  
+      76 +    // ── Zone 이벤트 ────────────────────────────────────     
+      77 +                                                               
+      78      protected override void OnPlayerEnter()
+      79      {
+      80          if (mineLoop != null) StopCoroutine(mineLoop);
+     ...
+       87          player?.ClearAutoMove();
+       88      }
+       89  
+       90 +    // ── 채굴 루프 ──────────────────────────────────────    
+       91 +                                                              
+       92      IEnumerator MineLoop()
+       93      {
+       94          while (player != null && inventory != null)
+       95          {
+       96              if (!inventory.CanAddOre) { yield return new WaitF
+           orSeconds(0.25f); continue; }
+       97  
+      100 -            OreItem target = GetNearest();                    
+      101 -            if (target == null) { yield return new WaitForSeco
+          -nds(0.5f); continue; }                                        
+       98 +            OreItem nearest = GetNearest();                   
+       99 +            if (nearest == null) { yield return new WaitForSec
+          +onds(0.5f); continue; }                                       
+      100  
+      101 +            // 레벨에 따른 채굴 범위·개수 결정                
+      102 +            int level   = UpgradeManager.Instance != null ? Up
+          +gradeManager.Instance.ToolLevel : 1;                          
+      103 +            int idx     = Mathf.Clamp(level - 1, 0, harvestRan
+          +gePerLevel.Length - 1);                                       
+      104 +            float range = harvestRangePerLevel[idx];          
+      105 +            int   count = harvestCountPerLevel[idx];          
+      106 +                                                              
+      107 +            // 가장 가까운 광석이 채굴 범위 안에 들어올 때까지
+          + 이동                                                         
+      108              bool arrived = false;
+      104 -            player.SetAutoMove(target.transform.position, () =
+          -> arrived = true, 0.7f);                                      
+      105 -            yield return new WaitUntil(() => arrived || player
+          - == null || target.IsMined);                                  
+      109 +            player.SetAutoMove(nearest.transform.position, () 
+          +=> arrived = true, range);                                    
+      110 +            yield return new WaitUntil(() => arrived || player
+          + == null || nearest.IsMined);                                 
+      111  
+      107 -            if (player == null || target.IsMined) continue;   
+      112 +            if (player == null) break;                        
+      113 +            if (nearest.IsMined) continue;                    
+      114  
+      115 +            // 채굴 애니메이션 재생                           
+      116              playerAnim?.TriggerMine();
+      117              yield return new WaitForSeconds(mineAnimSeconds);
+      118  
+      112 -            if (target == null || target.IsMined || inventory 
+          -== null || !inventory.CanAddOre) continue;                    
+      119 +            if (player == null || inventory == null) break;   
+      120  
+      114 -            target.Mine();                                    
+      115 -            inventory.AddOre(SpawnInventoryOre(target.transfor
+          -m.position));                                                 
+      121 +            // ★ 애니메이션 종료 시점: 플레이어 현재 위치 기준
+          + 범위 내 광석 채굴                                            
+      122 +            int mined = 0;                                    
+      123 +            foreach (OreItem ore in GetOresInRange(range, coun
+          +t))                                                           
+      124 +            {                                                 
+      125 +                if (!inventory.CanAddOre) break;              
+      126 +                ore.Mine();                                   
+      127 +                // 인벤토리 비주얼은 플레이어 위치에서 생성 → 
+          +등 뒤로 이동                                                  
+      128 +                inventory.AddOre(SpawnInventoryOre(player.tran
+          +sform.position + Vector3.up * 0.8f));                         
+      129 +                mined++;                                      
+      130 +            }                                                 
+      131 +                                                              
+      132 +            if (mined == 0) yield return new WaitForSeconds(0.
+          +3f);                                                          
+      133          }
+      134      }
+      135  
+      136 +    // ── 헬퍼 ───────────────────────────────────────────    
+      137 +                                                              
+      138      OreItem GetNearest()
+      139      {
+      140          OreItem nearest = null;
+     ...
+      148          return nearest;
+      149      }
+      150  
+      132 -    // 플레이어 인벤토리 광석: 씬 구체 바위와 구분되는 작은 큐
+          -브                                                            
+      133 -    GameObject SpawnInventoryOre(Vector3 pos)                 
+      151 +    // 플레이어 현재 위치 기준으로 range 안의 광석을 거리순 최
+          +대 maxCount개 반환                                            
+      152 +    List<OreItem> GetOresInRange(float range, int maxCount)   
+      153      {
+      135 -        if (oreVisualPrefab != null) return Instantiate(oreVis
+          -ualPrefab, pos, Quaternion.identity);                         
+      136 -        return CreatePrimitive(PrimitiveType.Cube, new Vector3
+          -(0.18f, 0.14f, 0.18f), new Color(0.22f, 0.17f, 0.12f));       
+      154 +        float rangeSqr = range * range;                       
+      155 +        var candidates = new List<(float sqDist, OreItem ore)>
+          +();                                                           
+      156 +                                                              
+      157 +        foreach (var ore in ores)                             
+      158 +        {                                                     
+      159 +            if (ore == null || ore.IsMined) continue;         
+      160 +            float sq = (player.transform.position - ore.transf
+          +orm.position).sqrMagnitude;                                   
+      161 +            if (sq <= rangeSqr) candidates.Add((sq, ore));    
+      162 +        }                                                     
+      163 +                                                              
+      164 +        candidates.Sort((a, b) => a.sqDist.CompareTo(b.sqDist)
+          +);                                                            
+      165 +                                                              
+      166 +        var result = new List<OreItem>();                     
+      167 +        for (int i = 0; i < Mathf.Min(candidates.Count, maxCou
+          +nt); i++)                                                     
+      168 +            result.Add(candidates[i].ore);                    
+      169 +        return result;                                        
+      170      }
+      171 +                                                              
+      172 +    GameObject SpawnInventoryOre(Vector3 spawnPos)            
+      173 +    {                                                         
+      174 +        if (oreVisualPrefab != null)                          
+      175 +            return Instantiate(oreVisualPrefab, spawnPos, Quat
+          +ernion.identity);                                             
+      176 +                                                              
+      177 +        var go = CreatePrimitive(PrimitiveType.Cube,          
+      178 +            new Vector3(0.18f, 0.14f, 0.18f), new Color(0.22f,
+          + 0.17f, 0.12f));                                              
+      179 +        go.transform.position = spawnPos;                     
+      180 +        return go;                                            
+      181 +    }                                                         
+      182  }
+
+❯ 아직 업그레이드까진 안 해도 돼 
+
+⏺ 업
+  ⎿  Interrupted · What should Claude do instead?
+
+❯ 업그레이드는 나중에 구현하고, 지금 mine하면 mine 모션이 끝나는 시점(0.5초     
+  후)에 플레이어 위치에 있는 광석 1개가 안 보여야 하는데, 그 위치가 안 맞는다는 
+   것임.                                                                        
+
+⏺ 원인은 거리 계산에서 Y 값 차이가 포함되기 때문입니다. 플레이어 Y ≈ 0.5, 광석 Y
+   ≈ 0.35로 3D 거리가 실제 수평 거리보다 커져서 엉뚱한 광석이 선택됩니다.
+  GetNearest와 GetOresInRange 모두 XZ 거리만 사용하도록 수정합니다.
+
+⏺ Update(Assets/Scripts/Zones/MineZone.cs)
+  ⎿  Added 11 lines, removed 3 lines
+      142          foreach (var ore in ores)
+      143          {
+      144              if (ore == null || ore.IsMined) continue;
+      145 -            float sq = (player.transform.position - ore.transf
+          -orm.position).sqrMagnitude;                                   
+      145 +            float sq = XZSqrDist(player.transform.position, or
+          +e.transform.position);                                        
+      146              if (sq < minSqr) { minSqr = sq; nearest = ore; }
+      147          }
+      148          return nearest;
+      149      }
+      150  
+      151 -    // 플레이어 현재 위치 기준으로 range 안의 광석을 거리순 최
+          -대 maxCount개 반환                                            
+      151 +    // 플레이어 현재 위치 기준 XZ 거리로 range 안의 광석을 가 
+          +까운 순으로 최대 maxCount개 반환                              
+      152      List<OreItem> GetOresInRange(float range, int maxCount)
+      153      {
+      154          float rangeSqr = range * range;
+     ...
+      157          foreach (var ore in ores)
+      158          {
+      159              if (ore == null || ore.IsMined) continue;
+      160 -            float sq = (player.transform.position - ore.transf
+          -orm.position).sqrMagnitude;                                   
+      160 +            float sq = XZSqrDist(player.transform.position, or
+          +e.transform.position);                                        
+      161              if (sq <= rangeSqr) candidates.Add((sq, ore));
+      162          }
+      163  
+     ...
+      169          return result;
+      170      }
+      171  
+      172 +    // Y 를 제외한 수평 거리 제곱 (광석과 플레이어의 Y 차이로 
+          +인한 오인식 방지)                                             
+      173 +    static float XZSqrDist(Vector3 a, Vector3 b)              
+      174 +    {                                                         
+      175 +        float dx = a.x - b.x;                                 
+      176 +        float dz = a.z - b.z;                                 
+      177 +        return dx * dx + dz * dz;                             
+      178 +    }                                                         
+      179 +                                                              
+      180      GameObject SpawnInventoryOre(Vector3 spawnPos)
+      181      {
+      182          if (oreVisualPrefab != null)
+
+⏺ GetNearest와 GetOresInRange 모두 XZ 거리만 사용합니다. HandleAutoMove도 이미
+  dir.y = 0f로 XZ만 보고 있어서 세 곳의 거리 기준이 일치합니다.
+
+✻ Cogitated for 1m 16s
+
+❯ 곡괭이는 mineZone에 들어갔을 때에만 활성화해줘. 그리고 autoMine은 필요 없어.  
+  가장 가까운 광석 자리에 광석이 없으면 안 캐지는 걸로 해줘. 플레이어의         
+  움직임은 오직 조이스틱으로만 할 거야.                                         
+
+⏺ 변경 사항:
+  1. PlayerController — toolObject 필드 + SetToolActive() 추가
+  2. MineZone — 오토무브 제거, 조이스틱으로 직접 다가가면 범위 내 광석 채굴, 존
+  입/퇴장 시 곡괭이 활성/비활성
+
+⏺ Update(Assets/Scripts/Player/PlayerController.cs)
+  ⎿  Added 2 lines, removed 1 line
+       5  {
+       6      [SerializeField] float moveSpeed = 5f;
+       7      [SerializeField] VirtualJoystick joystick;
+       8 -    [SerializeField] Camera gameCamera;  // 카메라 기준 방향 계
+         -산에 사용                                                      
+       8 +    [SerializeField] Camera gameCamera;                        
+       9 +    [SerializeField] GameObject toolObject;  // 곡괭이(ArmPivot
+         +) — MineZone 진입 시에만 활성화                                
+      10  
+      11      Rigidbody rb;
+      12      bool autoMoving;
+
+⏺ Update(Assets/Scripts/Player/PlayerController.cs)
+  ⎿  Added 1 line
+      22          rb.freezeRotation = true;
+      23          rb.interpolation = RigidbodyInterpolation.Interpolate;
+      24          if (gameCamera == null) gameCamera = Camera.main;
+      25 +        if (toolObject != null) toolObject.SetActive(false); //
+         + 기본 비활성                                                   
+      26      }
+      27  
+      28      void FixedUpdate()
+
+⏺ Update(Assets/Scripts/Player/PlayerController.cs)
+  ⎿  Added 5 lines
+      102          onReached = null;
+      103      }
+      104  
+      105 +    public void SetToolActive(bool active)                    
+      106 +    {                                                         
+      107 +        if (toolObject != null) toolObject.SetActive(active); 
+      108 +    }                                                         
+      109 +                                                              
+      110      public void SetJoystick(VirtualJoystick j) => joystick = j
+           ;
+      111  }
+
+⏺ 이제 MineZone을 재작성합니다.
+
+⏺ Write(Assets/Scripts/Zones/MineZone.cs)  ⎿  Added 18 lines, removed 57 lines
+      16  
+      17      [Header("채굴 튜닝")]
+      18      [SerializeField] float mineAnimSeconds = 0.5f;
+      19 -    // 레벨별 채굴 반경 (Lv1 곡괭이 / Lv2 드릴 / Lv3 폭파)     
+      20 -    [SerializeField] float[] harvestRangePerLevel = { 1.2f, 1.8
+         -f, 3.0f };                                                     
+      21 -    // 레벨별 한 번에 채굴되는 최대 광석 수                    
+      22 -    [SerializeField] int[] harvestCountPerLevel  = { 1, 2, 4 };
+      19 +    [SerializeField] float harvestRange = 1.2f;  // 이 범위 안 
+         +에 광석이 있어야 채굴 가능                                     
+      20  
+      21      readonly List<OreItem> ores = new List<OreItem>();
+      22      Coroutine mineLoop;
+     ...
+       74  
+       75      protected override void OnPlayerEnter()
+       76      {
+       77 +        player.SetToolActive(true);   // 곡괭이 활성화        
+       78          if (mineLoop != null) StopCoroutine(mineLoop);
+       79          mineLoop = StartCoroutine(MineLoop());
+       80      }
+       81  
+       82      protected override void OnPlayerExit()
+       83      {
+       84 +        player?.SetToolActive(false); // 곡괭이 비활성화      
+       85          if (mineLoop != null) { StopCoroutine(mineLoop); mineL
+           oop = null; }
+       87 -        player?.ClearAutoMove();                              
+       86      }
+       87  
+       88      // ── 채굴 루프 ──────────────────────────────────────
+       89 +    // 플레이어가 직접 조이스틱으로 이동해서 광석 범위 안에 들
+          +어오면 채굴                                                   
+       90  
+       91      IEnumerator MineLoop()
+       92      {
+       93          while (player != null && inventory != null)
+       94          {
+       95 +            // 인벤토리 가득 차면 대기                        
+       96              if (!inventory.CanAddOre) { yield return new WaitF
+           orSeconds(0.25f); continue; }
+       97  
+       98 -            OreItem nearest = GetNearest();                   
+       99 -            if (nearest == null) { yield return new WaitForSec
+          -onds(0.5f); continue; }                                       
+       98 +            // 범위 내에 광석이 없으면 대기 (오토무브 없음)   
+       99 +            OreItem nearest = GetNearestInRange(harvestRange);
+      100 +            if (nearest == null) { yield return new WaitForSec
+          +onds(0.1f); continue; }                                       
+      101  
+      101 -            // 레벨에 따른 채굴 범위·개수 결정                
+      102 -            int level   = UpgradeManager.Instance != null ? Up
+          -gradeManager.Instance.ToolLevel : 1;                          
+      103 -            int idx     = Mathf.Clamp(level - 1, 0, harvestRan
+          -gePerLevel.Length - 1);                                       
+      104 -            float range = harvestRangePerLevel[idx];          
+      105 -            int   count = harvestCountPerLevel[idx];          
+      106 -                                                              
+      107 -            // 가장 가까운 광석이 채굴 범위 안에 들어올 때까지
+          - 이동                                                         
+      108 -            bool arrived = false;                             
+      109 -            player.SetAutoMove(nearest.transform.position, () 
+          -=> arrived = true, range);                                    
+      110 -            yield return new WaitUntil(() => arrived || player
+          - == null || nearest.IsMined);                                 
+      111 -                                                              
+      112 -            if (player == null) break;                        
+      113 -            if (nearest.IsMined) continue;                    
+      114 -                                                              
+      115 -            // 채굴 애니메이션 재생                           
+      102 +            // 채굴 애니메이션                                
+      103              playerAnim?.TriggerMine();
+      104              yield return new WaitForSeconds(mineAnimSeconds);
+      105  
+      106              if (player == null || inventory == null) break;
+      107  
+      121 -            // ★ 애니메이션 종료 시점: 플레이어 현재 위치 기준
+          - 범위 내 광석 채굴                                            
+      122 -            int mined = 0;                                    
+      123 -            foreach (OreItem ore in GetOresInRange(range, coun
+          -t))                                                           
+      124 -            {                                                 
+      125 -                if (!inventory.CanAddOre) break;              
+      126 -                ore.Mine();                                   
+      127 -                // 인벤토리 비주얼은 플레이어 위치에서 생성 → 
+          -등 뒤로 이동                                                  
+      128 -                inventory.AddOre(SpawnInventoryOre(player.tran
+          -sform.position + Vector3.up * 0.8f));                         
+      129 -                mined++;                                      
+      130 -            }                                                 
+      108 +            // 애니메이션 종료 시점: 범위 내 가장 가까운 광석 
+          +1개 채굴                                                      
+      109 +            OreItem target = GetNearestInRange(harvestRange); 
+      110 +            if (target == null) continue;  // 대기 중 광석이  
+          +사라졌으면 스킵                                               
+      111  
+      132 -            if (mined == 0) yield return new WaitForSeconds(0.
+          -3f);                                                          
+      112 +            target.Mine();                                    
+      113 +            inventory.AddOre(SpawnInventoryOre(player.transfor
+          +m.position + Vector3.up * 0.8f));                             
+      114          }
+      115      }
+      116  
+      117      // ── 헬퍼 ───────────────────────────────────────────
+      118  
+      138 -    OreItem GetNearest()                                      
+      119 +    // range 안에서 가장 가까운 광석 반환 (없으면 null)       
+      120 +    OreItem GetNearestInRange(float range)                    
+      121      {
+      122          OreItem nearest = null;
+      141 -        float minSqr = float.MaxValue;                        
+      123 +        float minSqr = range * range;                         
+      124 +                                                              
+      125          foreach (var ore in ores)
+      126          {
+      127              if (ore == null || ore.IsMined) continue;
+     ...
+      131          return nearest;
+      132      }
+      133  
+      151 -    // 플레이어 현재 위치 기준 XZ 거리로 range 안의 광석을 가 
+          -까운 순으로 최대 maxCount개 반환                              
+      152 -    List<OreItem> GetOresInRange(float range, int maxCount)   
+      153 -    {                                                         
+      154 -        float rangeSqr = range * range;                       
+      155 -        var candidates = new List<(float sqDist, OreItem ore)>
+          -();                                                           
+      156 -                                                              
+      157 -        foreach (var ore in ores)                             
+      158 -        {                                                     
+      159 -            if (ore == null || ore.IsMined) continue;         
+      160 -            float sq = XZSqrDist(player.transform.position, or
+          -e.transform.position);                                        
+      161 -            if (sq <= rangeSqr) candidates.Add((sq, ore));    
+      162 -        }                                                     
+      163 -                                                              
+      164 -        candidates.Sort((a, b) => a.sqDist.CompareTo(b.sqDist)
+          -);                                                            
+      165 -                                                              
+      166 -        var result = new List<OreItem>();                     
+      167 -        for (int i = 0; i < Mathf.Min(candidates.Count, maxCou
+          -nt); i++)                                                     
+      168 -            result.Add(candidates[i].ore);                    
+      169 -        return result;                                        
+      170 -    }                                                         
+      171 -                                                              
+      172 -    // Y 를 제외한 수평 거리 제곱 (광석과 플레이어의 Y 차이로 
+          -인한 오인식 방지)                                             
+      134      static float XZSqrDist(Vector3 a, Vector3 b)
+      135      {
+      136          float dx = a.x - b.x;
+
+⏺ ---
+  변경 요약:
+
+  PlayerController
+  - toolObject 필드 추가 — Inspector에서 ArmPivot 연결
+  - Awake에서 기본 비활성화
+  - SetToolActive(bool) 메서드 추가
+
+  MineZone
+  - OnPlayerEnter → player.SetToolActive(true)
+  - OnPlayerExit → player.SetToolActive(false)
+  - 오토무브 완전 제거
+  - MineLoop 흐름:
+  범위 내 광석 있음? → 채굴 애니메이션(0.5초) → 종료 시 광석 채굴
+  범위 내 광석 없음? → 0.1초 대기 후 다시 확인
+
+  Inspector에서 PlayerController의 Tool Object 필드에 ArmPivot GameObject를
+  드래그해서 연결하면 됩니다.
+
+✻ Churned for 5m 57s
+
+※ recap: Prison Life 모바일 아이들 게임 Unity CoreLoop 구현 중. 현재 MineZone 채굴 로직과 플레이어 곡괭이 활성화까지 완료했고, 다음은 Unity Editor에서 PlayerController의 Tool Object 필드에 ArmPivot을 연결하면 됩니다.
+
+❯ 수감자에게 수갑을 납품하면 moneystackzone에 money Item이 여느 수갑, 광석      
+  오브젝트처럼 쌓여. 그걸 플레이어가 먹어야 돈이 오르는 거야. 그리고 그 돈은    
+  광석을 모을 때 처럼 플레이어 등 뒤에 시각적으로 보여.                         
+
+⏺ 현재 흐름과 달라지는 부분:
+  - DeskZone에서 GameManager.AddMoney() 제거
+  - MoneyStackZone에서 플레이어가 픽업할 때 GameManager.AddMoney() 호출
+  - MoneyItem에 금액 값(Value) 추가
+
+  Read 2 files (ctrl+o to expand)
+
+⏺ Write(Assets/Scripts/Items/MoneyItem.cs)
+  ⎿  Added 4 lines, removed 2 lines
+      1  using UnityEngine;
+      2  
+      3 -// Marker component for money inventory visuals                 
+      4 -public class MoneyItem : MonoBehaviour { }                      
+      3 +public class MoneyItem : MonoBehaviour                          
+      4 +{                                                               
+      5 +    public int Value { get; set; } = 1;                         
+      6 +}                                                               
+
+⏺ DeskZone에서 GameManager.AddMoney 제거하고, 돈 오브젝트에 Value를 붙입니다.
+
+⏺ Update(Assets/Scripts/Zones/DeskZone.cs)
+  ⎿  Added 2 lines, removed 3 lines
+      78                  queue[i].MoveToQueuePosition(slotPos);
+      79              }
+      80  
+      81 -            // 돈 처리 (카운터는 여기서 증가)                  
+      82 -            GameManager.Instance.AddMoney(moneyPerPrisoner);   
+      83 -            moneyStackZone?.AddMoney(SpawnMoneyVisual(transform
+         -.position));                                                   
+      81 +            // MoneyStackZone에 돈 오브젝트 쌓기 (카운터는 플레
+         +이어가 수령할 때 증가)                                         
+      82 +            moneyStackZone?.AddMoney(SpawnMoneyVisual(), moneyP
+         +erPrisoner);                                                   
+      83  
+      84              // 퇴장 후 마지막 슬롯으로 재사용
+      85              int lastSlot = queueSlots.Length - 1;
+
+⏺ Update(Assets/Scripts/Zones/DeskZone.cs)
+  ⎿  Added 4 lines, removed 2 lines
+      110          return go.GetComponent<PrisonerNPC>() ?? go.AddCompone
+           nt<PrisonerNPC>();
+      111      }
+      112  
+      113 -    GameObject SpawnMoneyVisual(Vector3 pos)                  
+      113 +    GameObject SpawnMoneyVisual()                             
+      114      {
+      115 -        return CreatePrimitive(PrimitiveType.Cube, new Vector3
+          -(0.18f, 0.08f, 0.25f), new Color(0.1f, 0.8f, 0.2f));          
+      115 +        var go = CreatePrimitive(PrimitiveType.Cube, new Vecto
+          +r3(0.18f, 0.08f, 0.25f), new Color(0.1f, 0.8f, 0.2f));        
+      116 +        go.AddComponent<MoneyItem>(); // Value는 MoneyStackZon
+          +e.AddMoney에서 설정                                           
+      117 +        return go;                                            
+      118      }
+      119  }
+
+⏺ MoneyStackZone에서 Value 저장 및 픽업 시 GameManager.AddMoney 호출합니다.
+
+⏺ Write(Assets/Scripts/Zones/MoneyStackZone.cs)
+  ⎿  Added 17 lines, removed 3 lines
+      14      readonly List<GameObject> stack = new List<GameObject>();
+      15      Coroutine collectRoutine;
+      16  
+      17 -    // Called by DeskZone when a prisoner is processed         
+      18 -    public void AddMoney(GameObject obj)                       
+      17 +    // DeskZone에서 수감자 처리 완료 시 호출 — 돈 오브젝트를 스
+         +택에 추가                                                      
+      18 +    public void AddMoney(GameObject obj, int value = 1)        
+      19      {
+      20 +        var item = obj.GetComponent<MoneyItem>();              
+      21 +        if (item == null) item = obj.AddComponent<MoneyItem>();
+      22 +        item.Value = value;                                    
+      23 +                                                               
+      24          obj.transform.position = StackTopPosition;
+      25          stack.Add(obj);
+      26      }
+     ...
+      57  
+      58              GameObject top = stack[stack.Count - 1];
+      59              stack.RemoveAt(stack.Count - 1);
+      56 -            if (top != null) inventory.AddMoney(top);          
+      60  
+      61 +            if (top != null)                                   
+      62 +            {                                                  
+      63 +                // 수령 시점에 돈 카운터 증가                  
+      64 +                var item = top.GetComponent<MoneyItem>();      
+      65 +                int value = item != null ? item.Value : 1;     
+      66 +                GameManager.Instance.AddMoney(value);          
+      67 +                                                               
+      68 +                // 플레이어 등 뒤 스택에 시각적으로 추가       
+      69 +                inventory.AddMoney(top);                       
+      70 +            }                                                  
+      71 +                                                               
+      72              yield return new WaitForSeconds(collectInterval);
+      73          }
+      74      }
+
+⏺ ---
+  변경된 흐름:
+
+  수감자 처리 완료
+    → MoneyStackZone에 돈 오브젝트 쌓임 (구역에 녹색 큐브들이 쌓임)
+
+  플레이어가 MoneyStackZone 진입
+    → 0.15초 간격으로 돈 오브젝트 한 개씩 수령
+    → GameManager.AddMoney(value)  ← 여기서 카운터 증가
+    → 오브젝트가 플레이어 등 뒤 스택으로 이동 (광석·수갑처럼 시각적으로 보임)
+
+  ┌─────────────────┬─────────────────────┬─────────────────────────────────┐
+  │                 │        이전         │              이후               │
+  ├─────────────────┼─────────────────────┼─────────────────────────────────┤
+  │ 카운터 증가     │ DeskZone (처리      │ MoneyStackZone (플레이어 수령   │
+  │ 시점            │ 즉시)               │ 시)                             │
+  ├─────────────────┼─────────────────────┼─────────────────────────────────┤
+  │ 돈 오브젝트     │ 시각 전용           │ MoneyItem.Value 포함            │
+  ├─────────────────┼─────────────────────┼─────────────────────────────────┤
+  │ 플레이어 등     │ 광석·수갑만         │ 광석 → 수갑 → 돈 순으로 쌓임    │
+  └─────────────────┴─────────────────────┴─────────────────────────────────┘
+
+✻ Churned for 1m 25s
+
+❯ money 프리팹이 있으니 그걸 썼으면 좋겠어.                                     
+
+⏺ DeskZone에 moneyPrefab 필드를 추가해서 Inspector에서 연결할 수 있게 합니다.
+
+⏺ Update(Assets/Scripts/Zones/DeskZone.cs)
+  ⎿  Added 1 line
+       7      [Header("References")]
+       8      [SerializeField] MoneyStackZone moneyStackZone;
+       9      [SerializeField] GameObject prisonerPrefab;
+      10 +    [SerializeField] GameObject moneyPrefab;                   
+      11      [SerializeField] Transform[] queueSlots;
+      12      [SerializeField] Transform jailExit;          // 수감자 퇴
+          장 방향 기준점
+      13  
+
+⏺ Update(Assets/Scripts/Zones/DeskZone.cs)
+  ⎿  Added 6 lines, removed 2 lines
+      113  
+      114      GameObject SpawnMoneyVisual()
+      115      {
+      116 -        var go = CreatePrimitive(PrimitiveType.Cube, new Vecto
+          -r3(0.18f, 0.08f, 0.25f), new Color(0.1f, 0.8f, 0.2f));        
+      117 -        go.AddComponent<MoneyItem>(); // Value는 MoneyStackZon
+          -e.AddMoney에서 설정                                           
+      116 +        GameObject go = moneyPrefab != null                   
+      117 +            ? Instantiate(moneyPrefab)                        
+      118 +            : CreatePrimitive(PrimitiveType.Cube, new Vector3(
+          +0.18f, 0.08f, 0.25f), new Color(0.1f, 0.8f, 0.2f));           
+      119 +                                                              
+      120 +        if (go.GetComponent<MoneyItem>() == null)             
+      121 +            go.AddComponent<MoneyItem>(); // Value는 MoneyStac
+          +kZone.AddMoney에서 설정                                       
+      122          return go;
+      123      }
+      124  }
+
+⏺ Inspector에서 DeskZone의 Money Prefab 필드에 프리팹을 드래그해서 연결하면
+  됩니다. 프리팹에 MoneyItem 컴포넌트가 없어도 자동으로 추가됩니다.
+
+✻ Cogitated for 13s
+
+❯ 등 뒤에 쌓이는 오브젝트는 종류를 구분해서 쌓여. 1 종류만 있다면 1줄, 돈과     
+  광석이 둘다 있으면 두 줄. 한 스택의 오프셋이 z: -0.45면 다음 줄은 - 0.9       
+  정도에 있어. 그리고 2줄에서 1줄로 되었을 때 그 줄은 플레이어와 가까운 스택인  
+  -0.45위치로 옮겨야 해.                                                        
+
+⏺ 현재 PlayerInventory는 3종류를 순서대로 1열에 쌓는 구조입니다. 이걸 종류별로 
+  독립된 열(column) 로 바꿉니다. 활성 열 수에 따라 Z 위치를 동적으로 재배치하면
+  "1종류만 있으면 -0.45로 모인다"가 자동으로 됩니다.
+
+⏺ Write(Assets/Scripts/Player/PlayerInventory.cs)
+  ⎿  Added 51 lines, removed 27 lines
+       5  public class PlayerInventory : MonoBehaviour
+       6  {
+       7      [Header("Stack Layout")]
+       8 -    [SerializeField] Vector3 stackBaseOffset = new Vector3(0f, 
+         -0.15f, -0.45f);                                                
+       9 -    [SerializeField] float itemSpacing = 0.22f;                
+       8 +    [SerializeField] float baseX        = 0f;      // 열의 X 오
+         +프셋                                                           
+       9 +    [SerializeField] float baseY        = 0.15f;   // 첫 번째  
+         +아이템 Y 오프셋                                                
+      10 +    [SerializeField] float col1Z        = -0.45f;  // 가장 가까
+         +운 열 Z                                                        
+      11 +    [SerializeField] float colZSpacing  = -0.45f;  // 열 간 Z  
+         +간격 (음수 = 플레이어에서 멀어지는 방향)                       
+      12 +    [SerializeField] float itemSpacing  = 0.22f;   // 한 열 안 
+         +에서 아이템 높이 간격                                          
+      13      [SerializeField] float posLerpSpeed = 14f;
+      14  
+      15      public int MaxOre { get; set; } = UpgradeManager.ORE_CAP_LV
+          L1;
+      16  
+      14 -    readonly List<GameObject> oreStack = new List<GameObject>()
+         -;                                                              
+      17 +    readonly List<GameObject> oreStack      = new List<GameObje
+         +ct>();                                                         
+      18      readonly List<GameObject> handcuffStack = new List<GameObje
+          ct>();
+      16 -    readonly List<GameObject> moneyStack = new List<GameObject>
+         -();                                                            
+      19 +    readonly List<GameObject> moneyStack    = new List<GameObje
+         +ct>();                                                         
+      20  
+      18 -    public int OreCount => oreStack.Count;                     
+      19 -    public int HandcuffCount => handcuffStack.Count;           
+      20 -    public int MoneyCount => moneyStack.Count;                 
+      21 -    public bool CanAddOre => oreStack.Count < MaxOre;          
+      21 +    public int  OreCount      => oreStack.Count;               
+      22 +    public int  HandcuffCount => handcuffStack.Count;          
+      23 +    public int  MoneyCount    => moneyStack.Count;             
+      24 +    public bool CanAddOre     => oreStack.Count < MaxOre;      
+      25  
+      26      void LateUpdate()
+      27      {
+      25 -        int index = 0;                                         
+      26 -        UpdateStackPositions(oreStack, ref index);             
+      27 -        UpdateStackPositions(handcuffStack, ref index);        
+      28 -        UpdateStackPositions(moneyStack, ref index);           
+      28 +        // 비어 있지 않은 열만 수집 (우선순위 고정: 광석 → 수갑
+         + → 돈)                                                         
+      29 +        var active = new List<List<GameObject>>();             
+      30 +        if (oreStack.Count      > 0) active.Add(oreStack);     
+      31 +        if (handcuffStack.Count > 0) active.Add(handcuffStack);
+      32 +        if (moneyStack.Count    > 0) active.Add(moneyStack);   
+      33 +                                                               
+      34 +        // 활성 열 수에 따라 Z 위치 자동 결정                  
+      35 +        // 2열 → 1열이 될 때 남은 열이 -0.45로 자연스럽게 이동 
+      36 +        for (int col = 0; col < active.Count; col++)           
+      37 +        {                                                      
+      38 +            float z = col1Z + col * colZSpacing;               
+      39 +            UpdateColumn(active[col], z);                      
+      40 +        }                                                      
+      41      }
+      42  
+      31 -    void UpdateStackPositions(List<GameObject> stack, ref int i
+         -ndex)                                                          
+      43 +    void UpdateColumn(List<GameObject> column, float z)        
+      44      {
+      33 -        for (int i = 0; i < stack.Count; i++)                  
+      45 +        // null 제거                                           
+      46 +        for (int i = column.Count - 1; i >= 0; i--)            
+      47 +            if (column[i] == null) column.RemoveAt(i);         
+      48 +                                                               
+      49 +        // index 0 = 맨 아래, Count-1 = 맨 위                  
+      50 +        for (int i = 0; i < column.Count; i++)                 
+      51          {
+      35 -            if (stack[i] == null) { stack.RemoveAt(i--); contin
+         -ue; }                                                          
+      36 -            Vector3 worldTarget = transform.TransformPoint(stac
+         -kBaseOffset + Vector3.up * (index * itemSpacing));             
+      37 -            stack[i].transform.position = Vector3.Lerp(stack[i]
+         -.transform.position, worldTarget, posLerpSpeed * Time.deltaTime
+         -);                                                             
+      38 -            stack[i].transform.rotation = Quaternion.Lerp(stack
+         -[i].transform.rotation, transform.rotation, posLerpSpeed * Time
+         -.deltaTime);                                                   
+      39 -            index++;                                           
+      52 +            Vector3 localTarget = new Vector3(baseX, baseY + i 
+         +* itemSpacing, z);                                             
+      53 +            Vector3 worldTarget = transform.TransformPoint(loca
+         +lTarget);                                                      
+      54 +            column[i].transform.position = Vector3.Lerp(       
+      55 +                column[i].transform.position, worldTarget, posL
+         +erpSpeed * Time.deltaTime);                                    
+      56 +            column[i].transform.rotation = Quaternion.Lerp(    
+      57 +                column[i].transform.rotation, transform.rotatio
+         +n, posLerpSpeed * Time.deltaTime);                             
+      58          }
+      59      }
+      60  
+      61 +    // ── 광석 ──────────────────────────────────────────      
+      62 +                                                               
+      63      public void AddOre(GameObject obj)
+      64      {
+      65 +        BounceIn(obj);                                         
+      66          oreStack.Add(obj);
+      46 -        StartCoroutine(PopIn(obj));                            
+      67      }
+      68  
+      69      public GameObject RemoveTopOre()
+     ...
+      75          return obj;
+      76      }
+      77  
+      78 +    // ── 수갑 ──────────────────────────────────────────      
+      79 +                                                               
+      80      public void AddHandcuff(GameObject obj)
+      81      {
+      82 +        BounceIn(obj);                                         
+      83          handcuffStack.Add(obj);
+      61 -        StartCoroutine(PopIn(obj));                            
+      84      }
+      85  
+      86      public GameObject RemoveTopHandcuff()
+     ...
+       92          return obj;
+       93      }
+       94  
+       95 +    // ── 돈 ────────────────────────────────────────────     
+       96 +                                                              
+       97      public void AddMoney(GameObject obj)
+       98      {
+       99 +        BounceIn(obj);                                        
+      100          moneyStack.Add(obj);
+       76 -        StartCoroutine(PopIn(obj));                           
+      101      }
+      102  
+      103      public GameObject RemoveTopMoney()
+     ...
+      109          return obj;
+      110      }
+      111  
+       88 -    // Item pops up slightly on add for satisfying feedback   
+       89 -    IEnumerator PopIn(GameObject obj)                         
+      112 +    // ── 공통 ──────────────────────────────────────────     
+      113 +                                                              
+      114 +    // 추가 시 위에서 떨어지는 연출 (LateUpdate lerp가 마무리)
+      115 +    static void BounceIn(GameObject obj)                      
+      116      {
+       91 -        if (obj == null) yield break;                         
+       92 -        obj.transform.position += Vector3.up * 1.2f;          
+       93 -        yield return null;                                    
+      117 +        if (obj != null) obj.transform.position += Vector3.up 
+          +* 1.2f;                                                       
+      118      }
+      119  }
+
+⏺ ---
+  동작 방식:
+
+  ┌───────────────────────────┬───────────────────────────────┐
+  │           상황            │            열 배치            │
+  ├───────────────────────────┼───────────────────────────────┤
+  │ 광석만 있음               │ 광석 → z = -0.45              │
+  ├───────────────────────────┼───────────────────────────────┤
+  │ 수갑만 있음               │ 수갑 → z = -0.45              │
+  ├───────────────────────────┼───────────────────────────────┤
+  │ 광석 + 돈                 │ 광석 z = -0.45 / 돈 z = -0.90 │
+  ├───────────────────────────┼───────────────────────────────┤
+  │ 광석 + 수갑 + 돈          │ z = -0.45 / -0.90 / -1.35     │
+  ├───────────────────────────┼───────────────────────────────┤
+  │ 광석 다 소비 후 돈만 남음 │ 돈이 -0.90 → -0.45로 이동     │
+  └───────────────────────────┴───────────────────────────────┘
+
+  열 전환 시 Vector3.Lerp가 적용되어 부드럽게 이동합니다. Inspector에서 Col Z 
+  Spacing 값을 조정해 간격을 바꿀 수 있습니다.
+
+✻ Sautéed for 1m 13s
