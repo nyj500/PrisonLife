@@ -21,19 +21,20 @@ public class MoneyStackZone : BaseZone
         if (item == null) item = obj.AddComponent<MoneyItem>();
         item.Value = value;
 
-        obj.transform.position = StackTopPosition;
+        // 스택 위에서 떨어지는 연출
+        obj.transform.position = StackTopPosition + Vector3.up * 1.5f;
         stack.Add(obj);
     }
 
     public Vector3 StackTopPosition =>
-        transform.TransformPoint(stackBase + Vector3.up * (stack.Count * itemSpacing));
+        transform.position + stackBase + Vector3.up * (stack.Count * itemSpacing);
 
     void LateUpdate()
     {
         for (int i = stack.Count - 1; i >= 0; i--)
         {
             if (stack[i] == null) { stack.RemoveAt(i); continue; }
-            Vector3 target = transform.TransformPoint(stackBase + Vector3.up * (i * itemSpacing));
+            Vector3 target = transform.position + stackBase + Vector3.up * (i * itemSpacing);
             stack[i].transform.position = Vector3.Lerp(stack[i].transform.position, target, 12f * Time.deltaTime);
         }
     }

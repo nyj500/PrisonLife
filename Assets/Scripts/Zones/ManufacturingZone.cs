@@ -8,14 +8,17 @@ public class ManufacturingZone : BaseZone
     [SerializeField] HandcuffStackZone handcuffStackZone;
     [SerializeField] Material conveyorMaterial;
 
+    [Header("Stack Layout")]
+    [SerializeField] Vector3 stackBase = Vector3.zero;
+    [SerializeField] float itemSpacing  = 0.3f;
+
     [Header("Tuning")]
-    [SerializeField] float depositInterval = 0.5f;
-    [SerializeField] float manufactureTime = 1.0f;
+    [SerializeField] float depositInterval    = 0.5f;
+    [SerializeField] float manufactureTime    = 1.0f;
     [SerializeField] float conveyorScrollSpeed = 0.5f;
 
-    readonly Queue<GameObject> processQueue = new Queue<GameObject>();
+    readonly List<GameObject> pendingOres = new List<GameObject>();
     Coroutine depositRoutine;
-    bool isProcessing;
 
     protected override void OnAwake()
     {
@@ -26,6 +29,17 @@ public class ManufacturingZone : BaseZone
     {
         if (conveyorMaterial != null)
             conveyorMaterial.mainTextureOffset += Vector2.right * conveyorScrollSpeed * Time.deltaTime;
+    }
+
+    void LateUpdate()
+    {
+        for (int i = pendingOres.Count - 1; i >= 0; i--)
+        {
+            if (pendingOres[i] == null) { pendingOres.RemoveAt(i); continue; }
+            Vector3 target = transform.position + stackBase + Vector3.up * (i * itemSpacing);
+            pendingOres[i].transform.position = Vector3.Lerp(
+                pendingOres[i].transform.position, target, 12f * Time.deltaTime);
+        }
     }
 
     protected override void OnPlayerEnter()
@@ -48,8 +62,11 @@ public class ManufacturingZone : BaseZone
             GameObject oreVisual = inventory.RemoveTopOre();
             if (oreVisual != null)
             {
-                oreVisual.transform.position = transform.position;
-                processQueue.Enqueue(oreVisual);
+                // 스택 맨 위에서 아래로 낙하하는 연출
+                Vector3 spawnPos = transform.position + stackBase
+                    + Vector3.up * (pendingOres.Count * itemSpacing + 1.5f);
+                oreVisual.transform.SetPositionAndRotation(spawnPos, Quaternion.identity);
+                pendingOres.Add(oreVisual);
             }
 
             yield return new WaitForSeconds(depositInterval);
@@ -61,9 +78,10 @@ public class ManufacturingZone : BaseZone
     {
         while (true)
         {
-            if (processQueue.Count == 0) { yield return new WaitForSeconds(0.2f); continue; }
+            if (pendingOres.Count == 0) { yield return new WaitForSeconds(0.2f); continue; }
 
-            GameObject ore = processQueue.Dequeue();
+            GameObject ore = pendingOres[0];
+            pendingOres.RemoveAt(0);
             yield return new WaitForSeconds(manufactureTime);
 
             if (ore != null) ItemVisualPool.Instance.ReturnOre(ore);

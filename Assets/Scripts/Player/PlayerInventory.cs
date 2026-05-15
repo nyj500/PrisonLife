@@ -64,7 +64,8 @@ public class PlayerInventory : MonoBehaviour
 
     public void AddOre(GameObject obj)
     {
-        BounceIn(obj);
+        if (obj == null) return;
+        PlaceAboveSlot(obj, oreStack.Count, col1Z);
         oreStack.Add(obj);
     }
 
@@ -81,7 +82,8 @@ public class PlayerInventory : MonoBehaviour
 
     public void AddHandcuff(GameObject obj)
     {
-        BounceIn(obj);
+        if (obj == null) return;
+        PlaceAboveSlot(obj, handcuffStack.Count, handcuffZ);
         handcuffStack.Add(obj);
     }
 
@@ -98,7 +100,8 @@ public class PlayerInventory : MonoBehaviour
 
     public void AddMoney(GameObject obj)
     {
-        BounceIn(obj);
+        if (obj == null) return;
+        PlaceAboveSlot(obj, moneyStack.Count, col1Z + colZSpacing);
         moneyStack.Add(obj);
     }
 
@@ -114,9 +117,10 @@ public class PlayerInventory : MonoBehaviour
 
     // ── 공통 ──────────────────────────────────────────
 
-    // 추가 시 위에서 떨어지는 연출 (LateUpdate lerp가 마무리)
-    static void BounceIn(GameObject obj)
+    // 스택 슬롯 바로 위에서 시작 → LateUpdate lerp로 제자리에 안착
+    void PlaceAboveSlot(GameObject obj, int stackIndex, float z)
     {
-        if (obj != null) obj.transform.position += Vector3.up * 1.2f;
+        Vector3 local = new Vector3(baseX, baseY + stackIndex * itemSpacing + 1.2f, z);
+        obj.transform.position = transform.TransformPoint(local);
     }
 }

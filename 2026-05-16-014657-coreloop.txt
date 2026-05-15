@@ -1,0 +1,693 @@
+╭─── Claude Code v2.1.141 ─────────────────────────────────────────────────────╮
+│                                                    │ Tips for getting        │
+│                 Welcome back 예진!                 │ started                 │
+│                                                    │ Run /init to create a … │
+│                      ▗ ▗   ▖ ▖                     │ ─────────────────────── │
+│                                                    │ What's new              │
+│                        ▘▘ ▝▝                       │ Added `terminalSequenc… │
+│  Sonnet 4.6 · Claude Pro · nayejin500@gmail.com's  │ Added `CLAUDE_CODE_PLU… │
+│  Organization                                      │ Added `ANTHROPIC_WORKS… │
+│                 ~/Unity/PrisonLife                 │ /release-notes for more │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+✻ Conversation compacted (ctrl+o for history)
+
+
+❯ /compact                                                                      
+  ⎿  Compacted (ctrl+o to see full summary)
+  ⎿  Read Assets/Scripts/Player/PlayerInventory.cs (122 lines)
+  ⎿  Read Assets/Scripts/Zones/DeskZone.cs (125 lines)
+  ⎿  Read Assets/Scripts/Zones/MoneyStackZone.cs (76 lines)
+  ⎿  Read Assets/Scripts/Items/MoneyItem.cs (7 lines)
+  ⎿  Read Assets/Scripts/Zones/MineZone.cs (152 lines)
+
+※ recap: Prison Life Unity 모바일 게임의 CoreLoop 스크립트를 작성 중입니다. 플레이어 이동, 채굴, 제조, 수갑 납품, 돈 수령까지 기본 흐름이 구현되었고, 다음은 실제 Unity Editor에서 씬 세팅 및 테스트입니다.
+
+❯ 지금 prisoner들이 수갑을 받으면 jailexit 방향으로 이동하는데, 수갑을 받는     
+  동시에 새로운 prisoner가 줄을 서야 해. pool에 수감자가 있으면 재사용, 없으면  
+  새로 만들기. 또한 수갑을 받은 prisoner가 특정 위치까지 가면 pool에 들어가기.  
+
+⏺ 현재 PrisonerNPC.cs와 DeskZone.cs를 읽고 수정 방향을 파악하겠습니다.
+
+⏺ Bash(find /Users/nyj500/Unity/PrisonLife/Assets/Scripts -name "PrisonerNPC.cs"
+       | xargs cat -n)
+  ⎿       1     using UnityEngine;
+          2     using System.Collections;
+          3     using System;
+     … +36 lines (ctrl+o to expand)
+
+⏺ 현재 구조를 파악했습니다. 변경 내용:
+  - PrisonerNPC: LeaveAndRecycle → LeaveToPool(Vector3 exitPos, Action 
+  onArrived) (jailExit 위치까지 걷고 풀 반환)
+  - DeskZone: pool 리스트 추가, 처리 완료 즉시 새 수감자 투입, 처리된 수감자는
+  jailExit 도착 후 비활성 풀에 보관
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Write(Assets/Scripts/NPC/PrisonerNPC.cs)
+  ⎿  Added 8 lines, removed 20 lines
+      15      public bool IsFullyProcessed => handcuffsConsumed >= Requir
+          edHandcuffs;
+      16      public int Remaining => Mathf.Max(0, RequiredHandcuffs - ha
+          ndcuffsConsumed);
+      17  
+      18 -    // SetActive 호출 없음 — 호출부(DeskZone)에서 활성 상태를  
+         -직접 관리                                                      
+      18      public void Initialize(int required, Vector3 pos)
+      19      {
+      20          RequiredHandcuffs = required;
+     ...
+      32          isWalking = true;
+      33      }
+      34  
+      36 -    // 퇴장 → 마지막 슬롯으로 재사용                           
+      37 -    public void LeaveAndRecycle(Vector3 exitDir, Vector3 recycl
+         -ePos, int newRequirement, Action onRecycled)                   
+      35 +    // jailExit 위치까지 걷고 비활성화 → 풀 반환 콜백          
+      36 +    public void LeaveToPool(Vector3 exitPos, Action onPooled)  
+      37      {
+      38          isWalking = false;
+      40 -        StartCoroutine(LeaveRoutine(exitDir, recyclePos, newReq
+         -uirement, onRecycled));                                        
+      39 +        StartCoroutine(LeaveRoutine(exitPos, onPooled));       
+      40      }
+      41  
+      42      void Update()
+     ...
+      50          }
+      51      }
+      52  
+      54 -    IEnumerator LeaveRoutine(Vector3 exitDir, Vector3 recyclePo
+         -s, int newRequirement, Action onRecycled)                      
+      53 +    IEnumerator LeaveRoutine(Vector3 exitPos, Action onPooled) 
+      54      {
+      56 -        // 감옥 방향으로 퇴장                                  
+      57 -        Vector3 exitTarget = transform.position + exitDir.norma
+         -lized * 8f;                                                    
+      58 -        while (Vector3.Distance(transform.position, exitTarget)
+         - > 0.1f)                                                       
+      55 +        while (Vector3.Distance(transform.position, exitPos) > 
+         +0.1f)                                                          
+      56          {
+      60 -            transform.position = Vector3.MoveTowards(transform.
+         -position, exitTarget, walkSpeed * Time.deltaTime);             
+      57 +            transform.position = Vector3.MoveTowards(transform.
+         +position, exitPos, walkSpeed * Time.deltaTime);                
+      58              yield return null;
+      59          }
+      63 -                                                               
+      64 -        // 텔레포트 중 깜빡임 방지                             
+      60 +        // 콜백 먼저 → SetActive(false) (SetActive가 코루틴을  
+         +중단하므로 순서 중요)                                          
+      61 +        onPooled?.Invoke();                                    
+      62          gameObject.SetActive(false);
+      66 -                                                               
+      67 -        RequiredHandcuffs = newRequirement;                    
+      68 -        handcuffsConsumed = 0;                                 
+      69 -        transform.position = recyclePos;                       
+      70 -        queueTarget = recyclePos;                              
+      71 -        isWalking = false;                                     
+      72 -                                                               
+      73 -        gameObject.SetActive(true);                            
+      74 -        onRecycled?.Invoke();                                  
+      63      }
+      64  }
+
+⏺ Write(Assets/Scripts/Zones/DeskZone.cs)
+  ⎿  Added 31 lines, removed 19 lines
+       9      [SerializeField] GameObject prisonerPrefab;
+      10      [SerializeField] GameObject moneyPrefab;
+      11      [SerializeField] Transform[] queueSlots;
+      12 -    [SerializeField] Transform jailExit;          // 수감자 퇴 
+         -장 방향 기준점                                                 
+      12 +    [SerializeField] Transform jailExit;                       
+      13  
+      14      [Header("Tuning")]
+      15      [SerializeField] float consumeInterval = 0.3f;
+      16      [SerializeField] int moneyPerPrisoner = 1;
+      17  
+      18 -    // queueSlots 길이만큼 수감자 고정 풀로 운영               
+      18      readonly List<PrisonerNPC> queue = new List<PrisonerNPC>();
+      19 +    readonly List<PrisonerNPC> pool  = new List<PrisonerNPC>();
+      20      Coroutine processRoutine;
+      21  
+      22      void Start()
+      23      {
+      24 -        // 비활성 상태로 생성 → 위치 초기화 → 활성화 (0,0,0에서
+         - 한 프레임 렌더링되는 현상 방지)                               
+      24          for (int i = 0; i < queueSlots.Length; i++)
+      25          {
+      26              PrisonerNPC npc = CreatePrisonerNPC();
+      27              if (npc == null) return;
+      29 -            // npc.gameObject.SetActive(false);                
+      28              Vector3 spawnPos = queueSlots[i].position;
+      29              spawnPos.y = 1f;
+      30              npc.Initialize(Random.Range(2, 5), spawnPos);
+     ...
+      56  
+      57              PrisonerNPC front = queue[0];
+      58  
+      61 -            // 수갑 하나씩 소비 (수갑 부족하면 대기)           
+      59              while (!front.IsFullyProcessed)
+      60              {
+      61                  if (inventory.HandcuffCount == 0) { yield retur
+          n new WaitForSeconds(0.2f); continue; }
+     ...
+       76                  queue[i].MoveToQueuePosition(slotPos);
+       77              }
+       78  
+       82 -            // MoneyStackZone에 돈 오브젝트 쌓기 (카운터는 플 
+          -레이어가 수령할 때 증가)                                      
+       79              moneyStackZone?.AddMoney(SpawnMoneyVisual(), money
+           PerPrisoner);
+       80  
+       85 -            // 퇴장 후 마지막 슬롯으로 재사용                 
+       86 -            int lastSlot = queueSlots.Length - 1;             
+       87 -            Vector3 exitDir = jailExit != null                
+       88 -                ? (jailExit.position - front.transform.positio
+          -n).normalized                                                 
+       89 -                : Vector3.right;                              
+       90 -                                                              
+       91 -            Vector3 recyclePos = queueSlots[lastSlot].position
+          -;                                                             
+       92 -            recyclePos.y = 1f;                                
+       93 -            front.LeaveAndRecycle(exitDir, recyclePos, Random.
+          -Range(2, 5), () =>                                            
+       81 +            // 즉시 새 수감자를 마지막 슬롯에 배치            
+       82 +            int lastSlot = Mathf.Min(queue.Count, queueSlots.L
+          +ength - 1);                                                   
+       83 +            PrisonerNPC newNpc = GetOrCreatePrisoner();       
+       84 +            if (newNpc != null)                               
+       85              {
+       95 -                queue.Add(front);                             
+       96 -                front.MoveToQueuePosition(queueSlots[lastSlot]
+          -.position);                                                   
+       97 -            });                                               
+       86 +                Vector3 newPos = queueSlots[lastSlot].position
+          +;                                                             
+       87 +                newPos.y = 1f;                                
+       88 +                newNpc.Initialize(Random.Range(2, 5), newPos);
+       89 +                newNpc.gameObject.SetActive(true);            
+       90 +                queue.Add(newNpc);                            
+       91 +            }                                                 
+       92  
+       93 +            // 처리된 수감자: jailExit까지 걷고 풀 반환       
+       94 +            PrisonerNPC leaving = front;                      
+       95 +            Vector3 exitPos = jailExit != null                
+       96 +                ? jailExit.position                           
+       97 +                : leaving.transform.position + Vector3.right *
+          + 8f;                                                          
+       98 +            leaving.LeaveToPool(exitPos, () => pool.Add(leavin
+          +g));                                                          
+       99 +                                                              
+      100              yield return new WaitForSeconds(0.3f);
+      101          }
+      102      }
+      103  
+      104 +    PrisonerNPC GetOrCreatePrisoner()                         
+      105 +    {                                                         
+      106 +        if (pool.Count > 0)                                   
+      107 +        {                                                     
+      108 +            var npc = pool[pool.Count - 1];                   
+      109 +            pool.RemoveAt(pool.Count - 1);                    
+      110 +            return npc;                                       
+      111 +        }                                                     
+      112 +        return CreatePrisonerNPC();                           
+      113 +    }                                                         
+      114 +                                                              
+      115      PrisonerNPC CreatePrisonerNPC()
+      116      {
+      117          if (prisonerPrefab == null)
+     ...
+      130              : CreatePrimitive(PrimitiveType.Cube, new Vector3(
+           0.18f, 0.08f, 0.25f), new Color(0.1f, 0.8f, 0.2f));
+      131  
+      132          if (go.GetComponent<MoneyItem>() == null)
+      121 -            go.AddComponent<MoneyItem>(); // Value는 MoneyStac
+          -kZone.AddMoney에서 설정                                       
+      133 +            go.AddComponent<MoneyItem>();                     
+      134          return go;
+      135      }
+      136  }
+
+⏺ 변경 사항 요약:
+
+  PrisonerNPC.cs
+  - LeaveAndRecycle → LeaveToPool(Vector3 exitPos, Action onPooled) 로 교체
+  - jailExit까지 직접 걷고, 도착 시 콜백(pool.Add) 실행 → SetActive(false)
+  순서로 처리 (SetActive가 코루틴을 멈추므로 콜백을 먼저 호출)
+
+  DeskZone.cs
+  - pool 리스트 추가 (비활성 대기 수감자)
+  - 처리 완료 즉시 GetOrCreatePrisoner() 로 풀에서 꺼내거나 새로 생성해 마지막
+  슬롯에 배치
+  - 처리된 수감자는 LeaveToPool(jailExit.position, ...) 으로 실제 jailExit
+  위치까지 걷고 풀에 반환
+
+  Inspector에서 JailExit Transform을 수감자가 사라질 실제 위치(감옥 입구 등)에
+  연결해 주세요.
+
+✻ Cogitated for 1m 27s
+
+❯ 지금 jailexit까지 도착한 prisoner가 반환이 안 돼. jailexit 자리에 계속        
+  존재해. 그리고 새로운 prisoner가 생성되는 시점은 위치 2(마지막 인덱스)의      
+  prisoner가 1로 도착함과 동시에 생성하는 걸로 수정해줘.                        
+
+⏺ 두 가지 문제 원인:
+  1. SetActive(false)가 코루틴 내부에서 호출되면 같은 GameObject의 코루틴을 즉시
+   중단 — 마지막 줄이라도 불안정. 대신 콜백에서 외부로 빼기.
+  2. 새 수감자 생성 타이밍 — 마지막 수감자가 앞 슬롯에 도착한 시점을 WaitUntil로
+   감지.
+
+⏺ Write(Assets/Scripts/NPC/PrisonerNPC.cs)
+  ⎿  Added 7 lines, removed 8 lines
+      13      bool isWalking;
+      14  
+      15      public bool IsFullyProcessed => handcuffsConsumed >= Requir
+          edHandcuffs;
+      16 -    public int Remaining => Mathf.Max(0, RequiredHandcuffs - ha
+         -ndcuffsConsumed);                                              
+      16 +    public bool IsWalking        => isWalking;                 
+      17 +    public int  Remaining        => Mathf.Max(0, RequiredHandcu
+         +ffs - handcuffsConsumed);                                      
+      18  
+      19      public void Initialize(int required, Vector3 pos)
+      20      {
+     ...
+      33          isWalking = true;
+      34      }
+      35  
+      35 -    // jailExit 위치까지 걷고 비활성화 → 풀 반환 콜백          
+      36 -    public void LeaveToPool(Vector3 exitPos, Action onPooled)  
+      36 +    // exitPos까지 걸어간 뒤 콜백 호출 — SetActive/풀 처리는 호
+         +출부(DeskZone)에서                                             
+      37 +    public void LeaveToPool(Vector3 exitPos, Action onArrived) 
+      38      {
+      39          isWalking = false;
+      39 -        StartCoroutine(LeaveRoutine(exitPos, onPooled));       
+      40 +        StartCoroutine(LeaveRoutine(exitPos, onArrived));      
+      41      }
+      42  
+      43      void Update()
+     ...
+      51          }
+      52      }
+      53  
+      53 -    IEnumerator LeaveRoutine(Vector3 exitPos, Action onPooled) 
+      54 +    IEnumerator LeaveRoutine(Vector3 exitPos, Action onArrived)
+      55      {
+      56          while (Vector3.Distance(transform.position, exitPos) > 
+          0.1f)
+      57          {
+      58              transform.position = Vector3.MoveTowards(transform.
+          position, exitPos, walkSpeed * Time.deltaTime);
+      59              yield return null;
+      60          }
+      60 -        // 콜백 먼저 → SetActive(false) (SetActive가 코루틴을  
+         -중단하므로 순서 중요)                                          
+      61 -        onPooled?.Invoke();                                    
+      62 -        gameObject.SetActive(false);                           
+      61 +        onArrived?.Invoke(); // 호출부에서 SetActive(false) + p
+         +ool.Add 처리                                                   
+      62      }
+      63  }
+
+⏺ Write(Assets/Scripts/Zones/DeskZone.cs)
+  ⎿  Added 18 lines, removed 8 lines
+       78  
+       79              moneyStackZone?.AddMoney(SpawnMoneyVisual(), money
+           PerPrisoner);
+       80  
+       81 -            // 즉시 새 수감자를 마지막 슬롯에 배치            
+       81 +            // 처리된 수감자: jailExit까지 걷고 비활성화 → 풀 
+          +반환                                                          
+       82 +            PrisonerNPC leaving = front;                      
+       83 +            Vector3 exitPos = jailExit != null                
+       84 +                ? jailExit.position                           
+       85 +                : leaving.transform.position + Vector3.right *
+          + 8f;                                                          
+       86 +            leaving.LeaveToPool(exitPos, () =>                
+       87 +            {                                                 
+       88 +                leaving.gameObject.SetActive(false);          
+       89 +                pool.Add(leaving);                            
+       90 +            });                                               
+       91 +                                                              
+       92 +            // 마지막 슬롯 수감자가 앞 슬롯에 도착하면 새 수감
+          +자 생성                                                       
+       93 +            if (queue.Count > 0)                              
+       94 +            {                                                 
+       95 +                PrisonerNPC newLast = queue[queue.Count - 1]; 
+       96 +                yield return new WaitUntil(() => !newLast.IsWa
+          +lking);                                                       
+       97 +            }                                                 
+       98 +                                                              
+       99              int lastSlot = Mathf.Min(queue.Count, queueSlots.L
+           ength - 1);
+      100              PrisonerNPC newNpc = GetOrCreatePrisoner();
+      101              if (newNpc != null)
+     ...
+      107                  queue.Add(newNpc);
+      108              }
+      109  
+       93 -            // 처리된 수감자: jailExit까지 걷고 풀 반환       
+       94 -            PrisonerNPC leaving = front;                      
+       95 -            Vector3 exitPos = jailExit != null                
+       96 -                ? jailExit.position                           
+       97 -                : leaving.transform.position + Vector3.right *
+          - 8f;                                                          
+       98 -            leaving.LeaveToPool(exitPos, () => pool.Add(leavin
+          -g));                                                          
+       99 -                                                              
+      110              yield return new WaitForSeconds(0.3f);
+      111          }
+      112      }
+
+⏺ 수정 내용:
+
+  PrisonerNPC.cs
+  - IsWalking 프로퍼티 추가 (isWalking 필드 노출)
+  - LeaveRoutine 마지막 줄에서 SetActive(false) 제거 — 콜백만 호출하고 종료
+
+  DeskZone.cs
+  - leaving.LeaveToPool 콜백 안에서 leaving.gameObject.SetActive(false) 처리
+  (코루틴 외부에서 호출되므로 안전)
+  - pool.Add(leaving)도 콜백 안에서 처리
+  - WaitUntil(() => !newLast.IsWalking) — 마지막 수감자가 앞 슬롯에 실제
+  도착했을 때 새 수감자 스폰
+
+✻ Churned for 2m 31s
+
+※ recap: Prisoner pooling and queue system. Fixed disappearing bug by moving SetActive out of coroutine, and new prisoner now spawns when the last queued prisoner arrives at their new slot. Test the full DeskZone flow next.
+
+❯ 여전히 도착해도 사라지지 않는데. leaving.gameObject.SetActive(false);         
+                  pool.Add(leaving); 이게 실행이 안 되는 것 같아.               
+
+⏺ 원인 파악: jailExit Transform의 Y 좌표가 수감자(Y=1)와 다를 경우,
+  Vector3.Distance가 Y 차이 때문에 0.1f 아래로 내려가지 않아 while 루프가 탈출을
+   못 해 콜백이 호출되지 않습니다. LeaveRoutine을 XZ 전용 거리 판정으로
+  수정합니다.
+
+⏺ Update(Assets/Scripts/NPC/PrisonerNPC.cs)
+  ⎿  Added 9 lines, removed 3 lines
+      53  
+      54      IEnumerator LeaveRoutine(Vector3 exitPos, Action onArrived)
+      55      {
+      56 -        while (Vector3.Distance(transform.position, exitPos) > 
+         -0.1f)                                                          
+      56 +        float sqThreshold = 0.1f * 0.1f;                       
+      57 +        while (true)                                           
+      58          {
+      58 -            transform.position = Vector3.MoveTowards(transform.
+         -position, exitPos, walkSpeed * Time.deltaTime);                
+      59 +            float dx = transform.position.x - exitPos.x;       
+      60 +            float dz = transform.position.z - exitPos.z;       
+      61 +            if (dx * dx + dz * dz <= sqThreshold) break;       
+      62 +            // Y를 그대로 유지하면서 XZ 방향으로만 이동 (jailEx
+         +it Y 차이로 루프 탈출 불가 방지)                               
+      63 +            Vector3 xzTarget = new Vector3(exitPos.x, transform
+         +.position.y, exitPos.z);                                       
+      64 +            transform.position = Vector3.MoveTowards(transform.
+         +position, xzTarget, walkSpeed * Time.deltaTime);               
+      65              yield return null;
+      66          }
+      61 -        onArrived?.Invoke(); // 호출부에서 SetActive(false) + p
+         -ool.Add 처리                                                   
+      67 +        onArrived?.Invoke();                                   
+      68      }
+      69  }
+
+⏺ 원인: jailExit의 Y=0, 수감자 Y=1 상태에서 Vector3.Distance는 최소 ~1.0f →
+  while이 절대 탈출 못 함 → onArrived 미호출 → SetActive(false) 미실행.
+
+  수정: XZ 거리만 체크 (dx*dx + dz*dz <= 0.01f), 이동도 Y를 고정한 XZ 전용
+  타겟으로 변경. 이제 jailExit Y와 무관하게 도착 판정이 정상 동작합니다.
+
+✻ Sautéed for 1m 4s
+❯ Prisoner가 PrisonerPool 오브젝트 자식으로 생성되도록 해줘. PrisonerPool은 빈  
+  오브젝트로 에디터에서 할당하는 방식으로                                       
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(Assets/Scripts/Zones/DeskZone.cs)
+  ⎿  Added 1 line
+      10      [SerializeField] GameObject moneyPrefab;
+      11      [SerializeField] Transform[] queueSlots;
+      12      [SerializeField] Transform jailExit;
+      13 +    [SerializeField] Transform prisonerPoolParent;             
+      14  
+      15      [Header("Tuning")]
+      16      [SerializeField] float consumeInterval = 0.3f;
+
+⏺ Update(Assets/Scripts/Zones/DeskZone.cs)
+  ⎿  Added 1 line, removed 1 line
+      130              Debug.LogError("[DeskZone] prisonerPrefab이 비어 
+           있습니다. Inspector에서 연결해 주세요.", this);
+      131              return null;
+      132          }
+      133 -        GameObject go = Instantiate(prisonerPrefab);          
+      133 +        GameObject go = Instantiate(prisonerPrefab, prisonerPo
+          +olParent);                                                    
+      134          return go.GetComponent<PrisonerNPC>() ?? go.AddCompone
+           nt<PrisonerNPC>();
+      135      }
+      136  
+
+⏺ prisonerPoolParent가 null이면 Instantiate(prefab, null)은 씬 루트에 생성되므로
+   할당 안 해도 크래시는 없습니다. Inspector에서 DeskZone → Prisoner Pool Parent
+   필드에 PrisonerPool 빈 오브젝트를 연결해 주세요.
+
+✻ Brewed for 14s
+
+❯ 이제 인벤토리 Ore, 수갑, 돈 이 3가지  오브젝트도 Pooling으로 바꿔줘.          
+
+⏺ 전체 흐름 파악을 위해 관련 스크립트를 먼저 읽겠습니다.
+
+  Searched for 1 pattern, read 3 files (ctrl+o to expand)
+
+⏺ 전체 흐름을 파악했습니다. 아이템 생명주기:
+  - Ore: MineZone 생성 → PlayerInventory → ManufacturingZone 소멸
+  - Handcuff: ManufacturingZone 생성 → HandcuffStackZone → PlayerInventory →
+  DeskZone 소멸
+  - Money: DeskZone 생성 → MoneyStackZone → PlayerInventory 보관
+
+  GameObjectPool 유틸 + ItemVisualPool 싱글톤을 만들고, 각 존에서
+  Instantiate/Destroy를 대체합니다.
+
+⏺ Write(Assets/Scripts/Utils/GameObjectPool.cs)
+  ⎿  Wrote 41 lines to Assets/Scripts/Utils/GameObjectPool.cs
+       2 using System.Collections.Generic;
+       3 
+       4 public class GameObjectPool
+       5 {
+       6     readonly GameObject prefab;
+       8     readonly Queue<GameObject> available = new Queue<GameObject>
+         ();
+       9 
+      10     public GameObjectPool(GameObject prefab, int initialSize, Tr
+         ansform parent = null)
+     … +33 lines (ctrl+o to expand)
+
+⏺ Write(Assets/Scripts/Managers/ItemVisualPool.cs)
+  ⎿  Wrote 37 lines to Assets/Scripts/Managers/ItemVisualPool.cs
+       1 using UnityEngine;
+       2 
+       3 public class ItemVisualPool : MonoBehaviour
+       4 {
+       5     public static ItemVisualPool Instance { get; private set; }
+       6 
+       7     [Header("Prefabs")]
+       8     [SerializeField] GameObject oreVisualPrefab;
+       9     [SerializeField] GameObject handcuffVisualPrefab;
+      10     [SerializeField] GameObject moneyVisualPrefab;
+     … +36 lines (ctrl+o to expand)
+
+⏺ 이제 각 존을 수정합니다.
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(Assets/Scripts/Zones/MineZone.cs)
+  ⎿  Removed 3 lines
+      11      [SerializeField] GameObject orePrefab;
+      12      [SerializeField] Transform oreParent;
+      13  
+      14 -    [Header("인벤토리 비주얼")]                                
+      15 -    [SerializeField] GameObject oreVisualPrefab;               
+      16 -                                                               
+      14      [Header("채굴 튜닝")]
+      15      [SerializeField] float mineAnimSeconds = 0.5f;
+      16      [SerializeField] float harvestRange = 1.2f;  // 이 범위 안
+          에 광석이 있어야 채굴 가능
+
+⏺ Update(Assets/Scripts/Zones/MineZone.cs)
+  ⎿  Added 1 line, removed 7 lines
+      137  
+      138      GameObject SpawnInventoryOre(Vector3 spawnPos)
+      139      {
+      140 -        if (oreVisualPrefab != null)                          
+      141 -            return Instantiate(oreVisualPrefab, spawnPos, Quat
+          -ernion.identity);                                             
+      142 -                                                              
+      143 -        var go = CreatePrimitive(PrimitiveType.Cube,          
+      144 -            new Vector3(0.18f, 0.14f, 0.18f), new Color(0.22f,
+          - 0.17f, 0.12f));                                              
+      145 -        go.transform.position = spawnPos;                     
+      146 -        return go;                                            
+      140 +        return ItemVisualPool.Instance.GetOre(spawnPos);      
+      141      }
+      142  }
+
+⏺ Update(Assets/Scripts/Zones/ManufacturingZone.cs)
+  ⎿  Removed 1 line
+       6  {
+       7      [Header("References")]
+       8      [SerializeField] HandcuffStackZone handcuffStackZone;
+       9 -    [SerializeField] GameObject handcuffVisualPrefab;          
+       9      [SerializeField] Material conveyorMaterial;
+      10  
+      11      [Header("Tuning")]
+
+⏺ Update(Assets/Scripts/Zones/ManufacturingZone.cs)
+  ⎿  Added 1 line, removed 1 line
+      66              GameObject ore = processQueue.Dequeue();
+      67              yield return new WaitForSeconds(manufactureTime);
+      68  
+      69 -            if (ore != null) Destroy(ore);                     
+      69 +            if (ore != null) ItemVisualPool.Instance.ReturnOre(
+         +ore);                                                          
+      70  
+      71              if (handcuffStackZone != null)
+      72              {
+
+⏺ Update(Assets/Scripts/Zones/ManufacturingZone.cs)
+  ⎿  Added 1 line, removed 2 lines
+       95  
+       96      GameObject SpawnHandcuffVisual(Vector3 pos)
+       97      {
+       98 -        if (handcuffVisualPrefab != null) return Instantiate(h
+          -andcuffVisualPrefab, pos, Quaternion.identity);               
+       99 -        return CreatePrimitive(PrimitiveType.Cylinder, new Vec
+          -tor3(0.18f, 0.06f, 0.18f), new Color(0.8f, 0.8f, 0.8f));      
+       98 +        return ItemVisualPool.Instance.GetHandcuff(pos);      
+       99      }
+      100  }
+
+⏺ Update(Assets/Scripts/Zones/DeskZone.cs)
+  ⎿  Removed 1 line
+       7      [Header("References")]
+       8      [SerializeField] MoneyStackZone moneyStackZone;
+       9      [SerializeField] GameObject prisonerPrefab;
+      10 -    [SerializeField] GameObject moneyPrefab;                   
+      10      [SerializeField] Transform[] queueSlots;
+      11      [SerializeField] Transform jailExit;
+      12      [SerializeField] Transform prisonerPoolParent;
+
+⏺ Update(Assets/Scripts/Zones/DeskZone.cs)
+  ⎿  Added 1 line, removed 1 line
+      60              {
+      61                  if (inventory.HandcuffCount == 0) { yield retur
+          n new WaitForSeconds(0.2f); continue; }
+      62                  GameObject vis = inventory.RemoveTopHandcuff();
+      63 -                if (vis != null) Destroy(vis);                 
+      63 +                if (vis != null) ItemVisualPool.Instance.Return
+         +Handcuff(vis);                                                 
+      64                  front.ConsumeHandcuff();
+      65                  yield return new WaitForSeconds(consumeInterval
+          );
+      66              }
+
+⏺ Update(Assets/Scripts/Zones/DeskZone.cs)
+  ⎿  Added 2 lines, removed 5 lines
+      135  
+      136      GameObject SpawnMoneyVisual()
+      137      {
+      138 -        GameObject go = moneyPrefab != null                   
+      139 -            ? Instantiate(moneyPrefab)                        
+      140 -            : CreatePrimitive(PrimitiveType.Cube, new Vector3(
+          -0.18f, 0.08f, 0.25f), new Color(0.1f, 0.8f, 0.2f));           
+      141 -                                                              
+      142 -        if (go.GetComponent<MoneyItem>() == null)             
+      138 +        GameObject go = ItemVisualPool.Instance.GetMoney(trans
+          +form.position);                                               
+      139 +        if (go != null && go.GetComponent<MoneyItem>() == null
+          +)                                                             
+      140              go.AddComponent<MoneyItem>();
+      141          return go;
+      142      }
+
+⏺ 마지막으로 PlayerInventory.RemoveTopMoney()가 호출되는 시점(향후 뱅크존 등)에
+  풀 반환을 추가합니다.
+
+⏺ Update(Assets/Scripts/Player/PlayerInventory.cs)
+  ⎿  Added 1 line
+      108          int last = moneyStack.Count - 1;
+      109          var obj = moneyStack[last];
+      110          moneyStack.RemoveAt(last);
+      111 +        ItemVisualPool.Instance.ReturnMoney(obj);             
+      112          return obj;
+      113      }
+      114  
+⏺ 완료입니다. 씬 설정 방법:
+
+  1. 씬에 빈 오브젝트 ItemVisualPool 생성 → ItemVisualPool 컴포넌트 추가
+  2. Inspector에서 3개 프리팹 연결:
+    - Ore Visual Prefab — 기존 MineZone의 oreVisualPrefab이던 것
+    - Handcuff Visual Prefab — 기존 ManufacturingZone의 handcuffVisualPrefab이던
+   것
+    - Money Visual Prefab — 기존 DeskZone의 moneyPrefab이던 것
+
+  변경 요약:
+
+  ┌───────────┬───────────────────────┬─────────────────────────────────────┐
+  │   구분    │         이전          │                이후                 │
+  ├───────────┼───────────────────────┼─────────────────────────────────────┤
+  │ Ore 생성  │ MineZone Instantiate  │ ItemVisualPool.GetOre()             │
+  ├───────────┼───────────────────────┼─────────────────────────────────────┤
+  │ Ore 소멸  │ ManufacturingZone     │ ItemVisualPool.ReturnOre()          │
+  │           │ Destroy               │                                     │
+  ├───────────┼───────────────────────┼─────────────────────────────────────┤
+  │ Handcuff  │ ManufacturingZone     │ ItemVisualPool.GetHandcuff()        │
+  │ 생성      │ Instantiate           │                                     │
+  ├───────────┼───────────────────────┼─────────────────────────────────────┤
+  │ Handcuff  │ DeskZone Destroy      │ ItemVisualPool.ReturnHandcuff()     │
+  │ 소멸      │                       │                                     │
+  ├───────────┼───────────────────────┼─────────────────────────────────────┤
+  │ Money     │ DeskZone Instantiate  │ ItemVisualPool.GetMoney()           │
+  │ 생성      │                       │                                     │
+  ├───────────┼───────────────────────┼─────────────────────────────────────┤
+  │ Money     │ (미구현)              │ PlayerInventory.RemoveTopMoney()    │
+  │ 소멸      │                       │ 자동 반환                           │
+  └───────────┴───────────────────────┴─────────────────────────────────────┘
+
+✻ Cogitated for 3m 34s
+
+※ recap: 3가지 인벤토리 비주얼(Ore, 수갑, 돈) 오브젝트 풀링 작업 완료. 씬에 ItemVisualPool 오브젝트 생성 후 Inspector에서 3개 프리팹을 연결하면 됩니다.
+
+❯ prisoner 줄이 기존에 3명이었는데 1명이 줄었어.                                
+
+⏺ 현재 DeskZone.cs를 읽어 정확한 상태를 확인하겠습니다.
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ lastSlot 계산 버그입니다. queue.Count가 2일 때 Mathf.Min(2, 2) = 2로 맞지만,
+  한 번이라도 큐가 2로 줄어든 상태에서 재처리되면 Mathf.Min(1, 2) = 1이 되어
+  마지막 슬롯(2)이 아닌 슬롯 1에 생성됩니다. 새 수감자는 항상 마지막 슬롯에
+  생성해야 합니다.
+
+⏺ Update(Assets/Scripts/Zones/DeskZone.cs)
+  ⎿  Added 1 line, removed 1 line
+       96                  yield return new WaitUntil(() => !newLast.IsWa
+           lking);
+       97              }
+       98  
+       99 -            int lastSlot = Mathf.Min(queue.Count, queueSlots.L
+          -ength - 1);                                                   
+       99 +            int lastSlot = queueSlots.Length - 1;             
+      100              PrisonerNPC newNpc = GetOrCreatePrisoner();
+      101              if (newNpc != null)
+      102              {
+
+⏺ 새 수감자는 항상 queueSlots[lastSlot] (마지막 슬롯)에 생성됩니다. 이전 코드의
+  Mathf.Min(queue.Count, ...) 은 큐가 정상 크기보다 작아진 상태에서는 잘못된
+  인덱스를 반환했습니다.
+
+✻ Crunched for 10m 19s

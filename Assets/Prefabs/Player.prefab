@@ -205,7 +205,7 @@ MonoBehaviour:
   baseX: 0
   baseY: 0.15
   handcuffZ: 1
-  col1Z: -0.45
+  col1Z: -0.6
   colZSpacing: -0.45
   itemSpacing: 0.22
   posLerpSpeed: 14
