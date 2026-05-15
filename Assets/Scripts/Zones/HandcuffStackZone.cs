@@ -18,7 +18,7 @@ public class HandcuffStackZone : BaseZone
     public void AddHandcuff(GameObject obj)
     {
         // 스택 위에서 떨어지는 연출
-        obj.transform.position = StackTopPosition + Vector3.up * 1.5f;
+        obj.transform.SetPositionAndRotation(StackTopPosition + Vector3.up * 1.5f, Quaternion.identity);
         stack.Add(obj);
     }
 
