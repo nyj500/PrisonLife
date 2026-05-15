@@ -13,9 +13,9 @@ public class PrisonerNPC : MonoBehaviour
     bool isWalking;
 
     public bool IsFullyProcessed => handcuffsConsumed >= RequiredHandcuffs;
-    public int Remaining => Mathf.Max(0, RequiredHandcuffs - handcuffsConsumed);
+    public bool IsWalking        => isWalking;
+    public int  Remaining        => Mathf.Max(0, RequiredHandcuffs - handcuffsConsumed);
 
-    // SetActive 호출 없음 — 호출부(DeskZone)에서 활성 상태를 직접 관리
     public void Initialize(int required, Vector3 pos)
     {
         RequiredHandcuffs = required;
@@ -33,11 +33,11 @@ public class PrisonerNPC : MonoBehaviour
         isWalking = true;
     }
 
-    // 퇴장 → 마지막 슬롯으로 재사용
-    public void LeaveAndRecycle(Vector3 exitDir, Vector3 recyclePos, int newRequirement, Action onRecycled)
+    // exitPos까지 걸어간 뒤 콜백 호출 — SetActive/풀 처리는 호출부(DeskZone)에서
+    public void LeaveToPool(Vector3 exitPos, Action onArrived)
     {
         isWalking = false;
-        StartCoroutine(LeaveRoutine(exitDir, recyclePos, newRequirement, onRecycled));
+        StartCoroutine(LeaveRoutine(exitPos, onArrived));
     }
 
     void Update()
@@ -51,26 +51,19 @@ public class PrisonerNPC : MonoBehaviour
         }
     }
 
-    IEnumerator LeaveRoutine(Vector3 exitDir, Vector3 recyclePos, int newRequirement, Action onRecycled)
+    IEnumerator LeaveRoutine(Vector3 exitPos, Action onArrived)
     {
-        // 감옥 방향으로 퇴장
-        Vector3 exitTarget = transform.position + exitDir.normalized * 8f;
-        while (Vector3.Distance(transform.position, exitTarget) > 0.1f)
+        float sqThreshold = 0.1f * 0.1f;
+        while (true)
         {
-            transform.position = Vector3.MoveTowards(transform.position, exitTarget, walkSpeed * Time.deltaTime);
+            float dx = transform.position.x - exitPos.x;
+            float dz = transform.position.z - exitPos.z;
+            if (dx * dx + dz * dz <= sqThreshold) break;
+            // Y를 그대로 유지하면서 XZ 방향으로만 이동 (jailExit Y 차이로 루프 탈출 불가 방지)
+            Vector3 xzTarget = new Vector3(exitPos.x, transform.position.y, exitPos.z);
+            transform.position = Vector3.MoveTowards(transform.position, xzTarget, walkSpeed * Time.deltaTime);
             yield return null;
         }
-
-        // 텔레포트 중 깜빡임 방지
-        gameObject.SetActive(false);
-
-        RequiredHandcuffs = newRequirement;
-        handcuffsConsumed = 0;
-        transform.position = recyclePos;
-        queueTarget = recyclePos;
-        isWalking = false;
-
-        gameObject.SetActive(true);
-        onRecycled?.Invoke();
+        onArrived?.Invoke();
     }
 }
