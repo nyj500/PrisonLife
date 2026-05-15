@@ -108,6 +108,7 @@ public class PlayerInventory : MonoBehaviour
         int last = moneyStack.Count - 1;
         var obj = moneyStack[last];
         moneyStack.RemoveAt(last);
+        ItemVisualPool.Instance.ReturnMoney(obj);
         return obj;
     }
 

@@ -11,9 +11,6 @@ public class MineZone : BaseZone
     [SerializeField] GameObject orePrefab;
     [SerializeField] Transform oreParent;
 
-    [Header("인벤토리 비주얼")]
-    [SerializeField] GameObject oreVisualPrefab;
-
     [Header("채굴 튜닝")]
     [SerializeField] float mineAnimSeconds = 0.5f;
     [SerializeField] float harvestRange = 1.2f;  // 이 범위 안에 광석이 있어야 채굴 가능
@@ -140,12 +137,6 @@ public class MineZone : BaseZone
 
     GameObject SpawnInventoryOre(Vector3 spawnPos)
     {
-        if (oreVisualPrefab != null)
-            return Instantiate(oreVisualPrefab, spawnPos, Quaternion.identity);
-
-        var go = CreatePrimitive(PrimitiveType.Cube,
-            new Vector3(0.18f, 0.14f, 0.18f), new Color(0.22f, 0.17f, 0.12f));
-        go.transform.position = spawnPos;
-        return go;
+        return ItemVisualPool.Instance.GetOre(spawnPos);
     }
 }

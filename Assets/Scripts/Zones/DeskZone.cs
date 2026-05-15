@@ -7,7 +7,6 @@ public class DeskZone : BaseZone
     [Header("References")]
     [SerializeField] MoneyStackZone moneyStackZone;
     [SerializeField] GameObject prisonerPrefab;
-    [SerializeField] GameObject moneyPrefab;
     [SerializeField] Transform[] queueSlots;
     [SerializeField] Transform jailExit;
     [SerializeField] Transform prisonerPoolParent;
@@ -61,7 +60,7 @@ public class DeskZone : BaseZone
             {
                 if (inventory.HandcuffCount == 0) { yield return new WaitForSeconds(0.2f); continue; }
                 GameObject vis = inventory.RemoveTopHandcuff();
-                if (vis != null) Destroy(vis);
+                if (vis != null) ItemVisualPool.Instance.ReturnHandcuff(vis);
                 front.ConsumeHandcuff();
                 yield return new WaitForSeconds(consumeInterval);
             }
@@ -97,7 +96,7 @@ public class DeskZone : BaseZone
                 yield return new WaitUntil(() => !newLast.IsWalking);
             }
 
-            int lastSlot = Mathf.Min(queue.Count, queueSlots.Length - 1);
+            int lastSlot = queueSlots.Length - 1;
             PrisonerNPC newNpc = GetOrCreatePrisoner();
             if (newNpc != null)
             {
@@ -136,11 +135,8 @@ public class DeskZone : BaseZone
 
     GameObject SpawnMoneyVisual()
     {
-        GameObject go = moneyPrefab != null
-            ? Instantiate(moneyPrefab)
-            : CreatePrimitive(PrimitiveType.Cube, new Vector3(0.18f, 0.08f, 0.25f), new Color(0.1f, 0.8f, 0.2f));
-
-        if (go.GetComponent<MoneyItem>() == null)
+        GameObject go = ItemVisualPool.Instance.GetMoney(transform.position);
+        if (go != null && go.GetComponent<MoneyItem>() == null)
             go.AddComponent<MoneyItem>();
         return go;
     }

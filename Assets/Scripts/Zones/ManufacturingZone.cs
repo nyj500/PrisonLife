@@ -6,7 +6,6 @@ public class ManufacturingZone : BaseZone
 {
     [Header("References")]
     [SerializeField] HandcuffStackZone handcuffStackZone;
-    [SerializeField] GameObject handcuffVisualPrefab;
     [SerializeField] Material conveyorMaterial;
 
     [Header("Tuning")]
@@ -67,7 +66,7 @@ public class ManufacturingZone : BaseZone
             GameObject ore = processQueue.Dequeue();
             yield return new WaitForSeconds(manufactureTime);
 
-            if (ore != null) Destroy(ore);
+            if (ore != null) ItemVisualPool.Instance.ReturnOre(ore);
 
             if (handcuffStackZone != null)
             {
@@ -96,7 +95,6 @@ public class ManufacturingZone : BaseZone
 
     GameObject SpawnHandcuffVisual(Vector3 pos)
     {
-        if (handcuffVisualPrefab != null) return Instantiate(handcuffVisualPrefab, pos, Quaternion.identity);
-        return CreatePrimitive(PrimitiveType.Cylinder, new Vector3(0.18f, 0.06f, 0.18f), new Color(0.8f, 0.8f, 0.8f));
+        return ItemVisualPool.Instance.GetHandcuff(pos);
     }
 }
