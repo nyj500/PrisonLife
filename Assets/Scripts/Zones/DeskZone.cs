@@ -11,13 +11,24 @@ public class DeskZone : BaseZone
     [SerializeField] Transform jailExit;
     [SerializeField] Transform prisonerPoolParent;
 
+    [Header("Desk Handcuff Stack")]
+    [SerializeField] Transform deskStackBase;
+    [SerializeField] float deskItemSpacing = 0.15f;
+    [SerializeField] float depositInterval  = 0.2f;
+
     [Header("Tuning")]
     [SerializeField] float consumeInterval = 0.3f;
-    [SerializeField] int moneyPerPrisoner = 1;
+    [SerializeField] int moneyPerPrisoner  = 1;
 
-    readonly List<PrisonerNPC> queue = new List<PrisonerNPC>();
-    readonly List<PrisonerNPC> pool  = new List<PrisonerNPC>();
-    Coroutine processRoutine;
+    readonly List<PrisonerNPC> queue         = new List<PrisonerNPC>();
+    readonly List<PrisonerNPC> pool          = new List<PrisonerNPC>();
+    readonly List<GameObject>  deskHandcuffs = new List<GameObject>();
+
+    Coroutine depositRoutine;
+
+    // ── 초기화 ────────────────────────────────────────
+
+    protected override void OnAwake() => StartCoroutine(ProcessLoop());
 
     void Start()
     {
@@ -33,42 +44,88 @@ public class DeskZone : BaseZone
         }
     }
 
+    // ── 데스크 수갑 스택 시각 업데이트 ──────────────────
+
+    void LateUpdate()
+    {
+        if (deskStackBase == null) return;
+        for (int i = deskHandcuffs.Count - 1; i >= 0; i--)
+        {
+            if (deskHandcuffs[i] == null) { deskHandcuffs.RemoveAt(i); continue; }
+            Vector3 target = deskStackBase.position + Vector3.up * (i * deskItemSpacing);
+            deskHandcuffs[i].transform.position = Vector3.Lerp(
+                deskHandcuffs[i].transform.position, target, 12f * Time.deltaTime);
+        }
+    }
+
+    Vector3 DeskStackTopPosition =>
+        deskStackBase != null
+            ? deskStackBase.position + Vector3.up * (deskHandcuffs.Count * deskItemSpacing)
+            : transform.position;
+
+    // ── 플레이어 진입/퇴장 ────────────────────────────
+
     protected override void OnPlayerEnter()
     {
-        if (processRoutine != null) StopCoroutine(processRoutine);
-        processRoutine = StartCoroutine(ProcessLoop());
+        if (depositRoutine != null) StopCoroutine(depositRoutine);
+        depositRoutine = StartCoroutine(DepositLoop());
     }
 
     protected override void OnPlayerExit()
     {
-        if (processRoutine != null) { StopCoroutine(processRoutine); processRoutine = null; }
+        if (depositRoutine != null) { StopCoroutine(depositRoutine); depositRoutine = null; }
     }
 
-    IEnumerator ProcessLoop()
+    // ── 수갑 납품 (플레이어 → 데스크) ────────────────────
+
+    IEnumerator DepositLoop()
     {
         while (player != null && inventory != null)
         {
-            if (queue.Count == 0 || inventory.HandcuffCount == 0)
+            if (inventory.HandcuffCount == 0) { yield return new WaitForSeconds(0.2f); continue; }
+
+            GameObject vis = inventory.RemoveTopHandcuff();
+            if (vis != null)
             {
-                yield return new WaitForSeconds(0.2f);
-                continue;
+                vis.transform.SetPositionAndRotation(DeskStackTopPosition + Vector3.up * 1.5f, Quaternion.identity);
+                deskHandcuffs.Add(vis);
             }
+
+            yield return new WaitForSeconds(depositInterval);
+        }
+    }
+
+    // ── 수감자 처리 (독립 실행) ───────────────────────
+
+    IEnumerator ProcessLoop()
+    {
+        while (true)
+        {
+            if (queue.Count == 0) { yield return new WaitForSeconds(0.2f); continue; }
 
             PrisonerNPC front = queue[0];
 
-            while (!front.IsFullyProcessed)
+            // 수감자가 데스크에 도착할 때까지 대기
+            yield return new WaitUntil(() => !front.IsWalking);
+
+            // 데스크에 수갑이 충분해질 때까지 대기
+            yield return new WaitUntil(() => deskHandcuffs.Count >= front.RequiredHandcuffs);
+
+            // 수갑 소비
+            int needed = front.RequiredHandcuffs;
+            for (int i = 0; i < needed; i++)
             {
-                if (inventory.HandcuffCount == 0) { yield return new WaitForSeconds(0.2f); continue; }
-                GameObject vis = inventory.RemoveTopHandcuff();
-                if (vis != null) ItemVisualPool.Instance.ReturnHandcuff(vis);
+                int last = deskHandcuffs.Count - 1;
+                GameObject vis = deskHandcuffs[last];
+                deskHandcuffs.RemoveAt(last);
                 front.ConsumeHandcuff();
+                if (vis != null) ItemVisualPool.Instance.ReturnHandcuff(vis);
                 yield return new WaitForSeconds(consumeInterval);
             }
 
             // --- 처리 완료 ---
             queue.RemoveAt(0);
 
-            // 나머지 수감자들 한 칸씩 전진
             for (int i = 0; i < queue.Count && i < queueSlots.Length; i++)
             {
                 Vector3 slotPos = queueSlots[i].position;
@@ -78,7 +135,6 @@ public class DeskZone : BaseZone
 
             moneyStackZone?.AddMoney(SpawnMoneyVisual(), moneyPerPrisoner);
 
-            // 처리된 수감자: jailExit까지 걷고 비활성화 → 풀 반환
             PrisonerNPC leaving = front;
             Vector3 exitPos = jailExit != null
                 ? jailExit.position
@@ -89,27 +145,30 @@ public class DeskZone : BaseZone
                 pool.Add(leaving);
             });
 
-            // 마지막 슬롯 수감자가 앞 슬롯에 도착하면 새 수감자 생성
-            if (queue.Count > 0)
-            {
-                PrisonerNPC newLast = queue[queue.Count - 1];
-                yield return new WaitUntil(() => !newLast.IsWalking);
-            }
-
+            // 앞줄 이동과 동시에 새 수감자가 뒤에서 걸어오도록 즉시 생성
             int lastSlot = queueSlots.Length - 1;
+            Vector3 targetPos = queueSlots[lastSlot].position;
+            targetPos.y = 1f;
+
+            Vector3 entryPos = lastSlot > 0
+                ? targetPos + (queueSlots[lastSlot].position - queueSlots[lastSlot - 1].position)
+                : targetPos + Vector3.back * 2f;
+            entryPos.y = 1f;
+
             PrisonerNPC newNpc = GetOrCreatePrisoner();
             if (newNpc != null)
             {
-                Vector3 newPos = queueSlots[lastSlot].position;
-                newPos.y = 1f;
-                newNpc.Initialize(Random.Range(2, 5), newPos);
+                newNpc.Initialize(Random.Range(2, 5), entryPos);
                 newNpc.gameObject.SetActive(true);
+                newNpc.MoveToQueuePosition(targetPos);
                 queue.Add(newNpc);
             }
 
             yield return new WaitForSeconds(0.3f);
         }
     }
+
+    // ── 풀 관리 ──────────────────────────────────────
 
     PrisonerNPC GetOrCreatePrisoner()
     {

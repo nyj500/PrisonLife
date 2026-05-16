@@ -3,8 +3,8 @@ using TMPro;
 
 public class ZoneUI : MonoBehaviour
 {
-    [SerializeField] TextMeshPro labelText;
-    [SerializeField] TextMeshPro costText;
+    [SerializeField] TextMeshProUGUI labelText;
+    [SerializeField] TextMeshProUGUI costText;
 
     public void SetLabel(string text)
     {

@@ -67,6 +67,28 @@ public class MineZone : BaseZone
         return go;
     }
 
+    // ── 업그레이드 연동 ────────────────────────────────
+
+    void Start()
+    {
+        ApplyToolLevel();
+        if (UpgradeManager.Instance != null)
+            UpgradeManager.Instance.OnToolUpgraded += ApplyToolLevel;
+    }
+
+    void OnDestroy()
+    {
+        if (UpgradeManager.Instance != null)
+            UpgradeManager.Instance.OnToolUpgraded -= ApplyToolLevel;
+    }
+
+    void ApplyToolLevel()
+    {
+        if (UpgradeManager.Instance == null) return;
+        harvestRange    = UpgradeManager.Instance.CurrentMineRange;
+        mineAnimSeconds = UpgradeManager.Instance.CurrentMineSpeed;
+    }
+
     // ── Zone 이벤트 ────────────────────────────────────
 
     protected override void OnPlayerEnter()

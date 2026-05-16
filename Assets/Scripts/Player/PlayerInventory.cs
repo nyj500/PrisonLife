@@ -115,6 +115,13 @@ public class PlayerInventory : MonoBehaviour
         return obj;
     }
 
+    public void RemoveMoneyVisuals(int count)
+    {
+        int toRemove = Mathf.Min(count, moneyStack.Count);
+        for (int i = 0; i < toRemove; i++)
+            RemoveTopMoney();
+    }
+
     // ── 공통 ──────────────────────────────────────────
 
     // 스택 슬롯 바로 위에서 시작 → LateUpdate lerp로 제자리에 안착
