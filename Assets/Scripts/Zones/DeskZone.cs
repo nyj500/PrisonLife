@@ -116,15 +116,11 @@ public class DeskZone : BaseZone
             // 수감자가 데스크에 도착할 때까지 대기
             yield return new WaitUntil(() => !front.IsWalking);
 
-            // 감옥 수용 인원이 꽉 찼거나 수갑이 부족하면 대기 (둘 다 충족돼야 처리)
-            yield return new WaitUntil(() =>
-                !(JailManager.Instance != null && JailManager.Instance.IsFull) &&
-                deskHandcuffs.Count >= front.RequiredHandcuffs);
-
-            // 수갑 소비
-            int needed = front.RequiredHandcuffs;
-            for (int i = 0; i < needed; i++)
+            // 수갑을 1개씩 소비 — 데스크에 수갑이 생길 때마다 즉시 차감
+            while (front.Remaining > 0)
             {
+                yield return new WaitUntil(() => deskHandcuffs.Count > 0);
+
                 int last = deskHandcuffs.Count - 1;
                 GameObject vis = deskHandcuffs[last];
                 deskHandcuffs.RemoveAt(last);
@@ -132,6 +128,10 @@ public class DeskZone : BaseZone
                 if (vis != null) ItemVisualPool.Instance.ReturnHandcuff(vis);
                 yield return new WaitForSeconds(consumeInterval);
             }
+
+            // 수갑 소비 완료 후 감옥이 꽉 찼으면 빌 때까지 대기
+            yield return new WaitUntil(() =>
+                !(JailManager.Instance != null && JailManager.Instance.IsFull));
 
             // --- 처리 완료 ---
             SoundManager.Instance?.Play(SFXType.PrisonerSatisfied);

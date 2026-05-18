@@ -1,10 +1,15 @@
 using UnityEngine;
 using System.Collections;
 using System;
+using TMPro;
 
 public class PrisonerNPC : MonoBehaviour
 {
     [SerializeField] float walkSpeed = 2f;
+
+    [Header("HUD")]
+    [SerializeField] Transform      hudRoot;
+    [SerializeField] TextMeshProUGUI requirementText;
 
     public int RequiredHandcuffs { get; private set; }
     int handcuffsConsumed;
@@ -12,9 +17,13 @@ public class PrisonerNPC : MonoBehaviour
     Vector3 queueTarget;
     bool isWalking;
 
+    Camera mainCam;
+
     public bool IsFullyProcessed => handcuffsConsumed >= RequiredHandcuffs;
     public bool IsWalking        => isWalking;
     public int  Remaining        => Mathf.Max(0, RequiredHandcuffs - handcuffsConsumed);
+
+    void Awake() => mainCam = Camera.main;
 
     public void Initialize(int required, Vector3 pos)
     {
@@ -23,9 +32,29 @@ public class PrisonerNPC : MonoBehaviour
         transform.position = pos;
         queueTarget = pos;
         isWalking = false;
+        if (hudRoot != null) hudRoot.gameObject.SetActive(true);
+        UpdateHUD();
     }
 
-    public void ConsumeHandcuff() => handcuffsConsumed++;
+    public void ConsumeHandcuff()
+    {
+        handcuffsConsumed++;
+        UpdateHUD();
+    }
+
+    void UpdateHUD()
+    {
+        if (requirementText == null) return;
+        requirementText.text = Remaining.ToString();
+        if (Remaining == 0)
+            StartCoroutine(HideHUDRoutine());
+    }
+
+    IEnumerator HideHUDRoutine()
+    {
+        yield return new WaitForSeconds(0.5f);
+        if (hudRoot != null) hudRoot.gameObject.SetActive(false);
+    }
 
     public void MoveToQueuePosition(Vector3 pos)
     {
@@ -63,6 +92,13 @@ public class PrisonerNPC : MonoBehaviour
             }
             transform.position = new Vector3(wp.x, transform.position.y, wp.z);
         }
+    }
+
+    void LateUpdate()
+    {
+        if (hudRoot == null) return;
+        if (mainCam == null) mainCam = Camera.main;
+        if (mainCam != null) hudRoot.rotation = mainCam.transform.rotation;
     }
 
     void Update()
