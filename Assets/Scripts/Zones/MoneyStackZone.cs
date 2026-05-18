@@ -68,6 +68,7 @@ public class MoneyStackZone : BaseZone
 
                 // 플레이어 등 뒤 스택에 시각적으로 추가
                 inventory.AddMoney(top);
+                SoundManager.Instance?.Play(SFXType.MoneyPickup);
             }
 
             yield return new WaitForSeconds(collectInterval);

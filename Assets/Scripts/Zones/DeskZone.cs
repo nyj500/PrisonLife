@@ -96,6 +96,7 @@ public class DeskZone : BaseZone
             {
                 vis.transform.SetPositionAndRotation(DeskStackTopPosition + Vector3.up * 1.5f, Quaternion.identity);
                 deskHandcuffs.Add(vis);
+                SoundManager.Instance?.Play(SFXType.HandcuffDeposit);
             }
 
             yield return new WaitForSeconds(depositInterval);
@@ -133,6 +134,7 @@ public class DeskZone : BaseZone
             }
 
             // --- 처리 완료 ---
+            SoundManager.Instance?.Play(SFXType.PrisonerSatisfied);
             queue.RemoveAt(0);
 
             for (int i = 0; i < queue.Count && i < queueSlots.Length; i++)

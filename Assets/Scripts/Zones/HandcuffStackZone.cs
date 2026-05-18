@@ -64,7 +64,11 @@ public class HandcuffStackZone : BaseZone
 
             GameObject top = stack[stack.Count - 1];
             stack.RemoveAt(stack.Count - 1);
-            if (top != null) inventory.AddHandcuff(top);
+            if (top != null)
+            {
+                inventory.AddHandcuff(top);
+                SoundManager.Instance?.Play(SFXType.HandcuffPickup);
+            }
 
             yield return new WaitForSeconds(collectInterval);
         }

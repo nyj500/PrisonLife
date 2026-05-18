@@ -68,6 +68,7 @@ public class UpgradeZone : BaseZone
 
             if (success)
             {
+                SoundManager.Instance?.Play(SFXType.UpgradeComplete);
                 inventory?.RemoveMoneyVisuals(cost);
                 RefreshUI();
                 if (IsMaxed()) yield break;

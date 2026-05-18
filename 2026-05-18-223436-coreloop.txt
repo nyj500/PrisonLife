@@ -1,0 +1,2450 @@
+╭─── Claude Code v2.1.141 ─────────────────────────────────────────────────────╮
+│                                                    │ Tips for getting        │
+│                 Welcome back 예진!                 │ started                 │
+│                                                    │ Run /init to create a … │
+│                      ▗ ▗   ▖ ▖                     │ ─────────────────────── │
+│                                                    │ What's new              │
+│                        ▘▘ ▝▝                       │ Added `terminalSequenc… │
+│  Sonnet 4.6 · Claude Pro · nayejin500@gmail.com's  │ Added `CLAUDE_CODE_PLU… │
+│  Organization                                      │ Added `ANTHROPIC_WORKS… │
+│                 ~/Unity/PrisonLife                 │ /release-notes for more │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+✻ Conversation compacted (ctrl+o for history)
+
+
+❯ /compact                                                                      
+  ⎿  Compacted (ctrl+o to see full summary)
+  ⎿  Read Assets/Scripts/Zones/UpgradeZone.cs (151 lines)
+  ⎿  Read Assets/Scripts/UI/HUDManager.cs (36 lines)
+  ⎿  Read Assets/Scripts/UI/ZoneUI.cs (28 lines)
+  ⎿  Read Assets/Scripts/Zones/MineZone.cs (203 lines)
+  ⎿  Read Assets/Scripts/Managers/UpgradeManager.cs (82 lines)
+
+❯ 수감자 시스템에 추가할 게 있어. 지금은 수감자가 나가면 순환 재사용하는        
+  구조인데, 이젠 수감자는 지정된 장소(감옥)로 이동하고, 그 공간에 가만히 있어.  
+  또한 감옥에는 수용 인원이 정해져 있어서, 그 이상 수감자를 받으려면            
+  업그레이드가 필요해.  업그레이드 비용은 50원이야. 수용 인원이 다 차면 수갑    
+  납품의 개수가 충분해도 납품되지 않고, 따라서 수감자들의 이동 흐름이 멈춰.     
+  감옥은 사각형 공간인데 첫 수용 인원은 30명이고 그에 맞는 크기로 만들 거야.    
+  업그레이드 감옥 존에서 상호작용하여 업그레이드를 완료하면, 감옥 공간이 새로   
+  생겨(띠용 하는 연출과 함께)                                                   
+
+⏺ 현재 수감자 관련 파일들을 먼저 파악하겠습니다.
+
+  Searched for 1 pattern, read 5 files (ctrl+o to expand)
+
+⏺ 전체 흐름을 파악했습니다. 변경이 필요한 파일들을 정리하면:
+
+  - 신규: JailZone.cs (감옥 수용/슬롯/업그레이드 관리)
+  - 수정: PrisonerNPC.cs (감옥으로 이동 후 대기)
+  - 수정: DeskZone.cs (풀 재사용 → 감옥 이송, 수용 인원 꽉 차면 흐름 중단)
+  - 수정: UpgradeManager.cs (감옥 업그레이드 로직)
+  - 수정: UpgradeZone.cs (UpgradeType.Jail 추가)
+
+⏺ Write(Assets/Scripts/Zones/JailZone.cs)
+  ⎿  Wrote 92 lines to Assets/Scripts/Zones/JailZone.cs
+       2 using System.Collections;
+       3 using System.Collections.Generic;
+       4 
+       5 public class JailZone : MonoBehaviour
+       6 {
+       7     public static JailZone Instance { get; private set; }
+       8 
+       9     [Header("Layout")]
+      10     [SerializeField] Transform jailOrigin;       // 수감자 그리
+         드 시작 위치 (좌하단)
+     … +90 lines (ctrl+o to expand)
+
+⏺ 이제 PrisonerNPC에 WalkToCell 추가합니다.
+
+⏺ Update(Assets/Scripts/NPC/PrisonerNPC.cs)
+  ⎿  Added 7 lines
+      40          StartCoroutine(LeaveRoutine(exitPos, onArrived));
+      41      }
+      42  
+      43 +    // 감옥 셀까지 걸어간 뒤 그 자리에 멈춤                    
+      44 +    public void WalkToCell(Vector3 cellPos)                    
+      45 +    {                                                          
+      46 +        isWalking = false;                                     
+      47 +        StartCoroutine(LeaveRoutine(cellPos, null));           
+      48 +    }                                                          
+      49 +                                                               
+      50      void Update()
+      51      {
+      52          if (!isWalking) return;
+
+⏺ 이제 DeskZone을 수정합니다. pool 제거, ProcessLoop를 감옥 이송 방식으로
+  변경합니다.
+
+⏺ Update(Assets/Scripts/Zones/DeskZone.cs)
+  ⎿  Removed 1 line
+      21      [SerializeField] int moneyPerPrisoner  = 1;
+      22  
+      23      readonly List<PrisonerNPC> queue         = new List<Prisone
+          rNPC>();
+      24 -    readonly List<PrisonerNPC> pool          = new List<Prisone
+         -rNPC>();                                                       
+      24      readonly List<GameObject>  deskHandcuffs = new List<GameObj
+          ect>();
+      25  
+      26      Coroutine depositRoutine;
+
+⏺ Update(Assets/Scripts/Zones/DeskZone.cs)
+  ⎿  Added 8 lines, removed 13 lines
+      115              // 수감자가 데스크에 도착할 때까지 대기
+      116              yield return new WaitUntil(() => !front.IsWalking)
+           ;
+      117  
+      118 -            // 데스크에 수갑이 충분해질 때까지 대기           
+      119 -            yield return new WaitUntil(() => deskHandcuffs.Cou
+          -nt >= front.RequiredHandcuffs);                               
+      118 +            // 감옥 수용 인원이 꽉 찼거나 수갑이 부족하면 대기
+          + (둘 다 충족돼야 처리)                                        
+      119 +            yield return new WaitUntil(() =>                  
+      120 +                !(JailZone.Instance != null && JailZone.Instan
+          +ce.IsFull) &&                                                 
+      121 +                deskHandcuffs.Count >= front.RequiredHandcuffs
+          +);                                                            
+      122  
+      123              // 수갑 소비
+      124              int needed = front.RequiredHandcuffs;
+     ...
+      144  
+      145              moneyStackZone?.AddMoney(SpawnMoneyVisual(), money
+           PerPrisoner);
+      146  
+      145 -            PrisonerNPC leaving = front;                      
+      146 -            Vector3 exitPos = jailExit != null                
+      147 -                ? jailExit.position                           
+      148 -                : leaving.transform.position + Vector3.right *
+          - 8f;                                                          
+      149 -            leaving.LeaveToPool(exitPos, () =>                
+      150 -            {                                                 
+      151 -                leaving.gameObject.SetActive(false);          
+      152 -                pool.Add(leaving);                            
+      153 -            });                                               
+      147 +            // 감옥으로 이송 (풀 재사용 없이 영구 수감)       
+      148 +            JailZone.Instance?.AcceptPrisoner(front);         
+      149  
+      155 -            // 앞줄 이동과 동시에 새 수감자가 뒤에서 걸어오도 
+          -록 즉시 생성                                                  
+      150 +            // 새 수감자 입장 (뒤에서 걸어오기)               
+      151              int lastSlot = queueSlots.Length - 1;
+      152              Vector3 targetPos = queueSlots[lastSlot].position;
+      153              targetPos.y = 1f;
+     ...
+      157                  : targetPos + Vector3.back * 2f;
+      158              entryPos.y = 1f;
+      159  
+      165 -            PrisonerNPC newNpc = GetOrCreatePrisoner();       
+      160 +            PrisonerNPC newNpc = CreatePrisonerNPC();         
+      161              if (newNpc != null)
+      162              {
+      163                  newNpc.Initialize(Random.Range(2, 5), entryPos
+           );
+
+⏺ Update(Assets/Scripts/Zones/DeskZone.cs)
+  ⎿  Added 1 line, removed 12 lines
+      170          }
+      171      }
+      172  
+      173 -    // ── 풀 관리 ──────────────────────────────────────      
+      173 +    // ── NPC 생성 ──────────────────────────────────────     
+      174  
+      175 -    PrisonerNPC GetOrCreatePrisoner()                         
+      176 -    {                                                         
+      177 -        if (pool.Count > 0)                                   
+      178 -        {                                                     
+      179 -            var npc = pool[pool.Count - 1];                   
+      180 -            pool.RemoveAt(pool.Count - 1);                    
+      181 -            return npc;                                       
+      182 -        }                                                     
+      183 -        return CreatePrisonerNPC();                           
+      184 -    }                                                         
+      185 -                                                              
+      175      PrisonerNPC CreatePrisonerNPC()
+      176      {
+      177          if (prisonerPrefab == null)
+
+⏺ 이제 UpgradeManager에 감옥 업그레이드 추가합니다.
+
+⏺ Update(Assets/Scripts/Managers/UpgradeManager.cs)
+  ⎿  Added 3 lines
+      27      [SerializeField] int           deskWorkerHireCost = 50;
+      28      [SerializeField] DeskWorkerNPC deskWorkerNPC;
+      29  
+      30 +    [Header("Jail Capacity Upgrade")]                          
+      31 +    [SerializeField] int jailUpgradeCost = 50;                 
+      32 +                                                               
+      33      static readonly int[] oreCaps = { ORE_CAP_LVL1, ORE_CAP_LVL
+          2, ORE_CAP_LVL3 };
+      34  
+      35      public event Action OnToolUpgraded;
+
+⏺ Update(Assets/Scripts/Managers/UpgradeManager.cs)
+  ⎿  Added 1 line
+      40      public int   ToolUpgradeCost    => ToolLevel < TOOL_MAX_LEV
+          EL ? toolUpgradeCosts[ToolLevel - 1] : 0;
+      41      public int   WorkerHireCost     => workerHireCost;
+      42      public int   DeskWorkerHireCost => deskWorkerHireCost;
+      43 +    public int   JailUpgradeCost    => jailUpgradeCost;        
+      44  
+      45      void Awake()
+      46      {
+
+⏺ Update(Assets/Scripts/Managers/UpgradeManager.cs)
+  ⎿  Added 7 lines
+      76          return true;
+      77      }
+      78  
+      79 +    public bool TryUpgradeJail()                               
+      80 +    {                                                          
+      81 +        if (!GameManager.Instance.TrySpendMoney(jailUpgradeCost
+         +)) return false;                                               
+      82 +        JailZone.Instance?.UpgradeCapacity();                  
+      83 +        return true;                                           
+      84 +    }                                                          
+      85 +                                                               
+      86      void SpawnWorkers()
+      87      {
+      88          if (workerNPCs == null) return;
+
+⏺ 마지막으로 UpgradeZone에 Jail 타입을 추가합니다.
+
+⏺ Update(Assets/Scripts/Zones/UpgradeZone.cs)
+  ⎿  Added 1 line, removed 1 line
+      1  using UnityEngine;
+      2  using System.Collections;
+      3  
+      4 -public enum UpgradeType { Tool, Worker, DeskWorker }            
+      4 +public enum UpgradeType { Tool, Worker, DeskWorker, Jail }      
+      5  
+      6  public class UpgradeZone : BaseZone
+      7  {
+
+⏺ Update(Assets/Scripts/Zones/UpgradeZone.cs)
+  ⎿  Added 1 line
+      62                  UpgradeType.Tool       => UpgradeManager.Instan
+          ce.TryUpgradeTool(inventory),
+      63                  UpgradeType.Worker     => UpgradeManager.Instan
+          ce.TryHireWorker(),
+      64                  UpgradeType.DeskWorker => UpgradeManager.Instan
+          ce.TryHireDeskWorker(),
+      65 +                UpgradeType.Jail       => UpgradeManager.Instan
+         +ce.TryUpgradeJail(),                                           
+      66                  _                      => false
+      67              };
+      68  
+
+⏺ Update(Assets/Scripts/Zones/UpgradeZone.cs)
+  ⎿  Added 1 line
+      85              UpgradeType.Tool       => UpgradeManager.Instance.T
+          oolUpgradeCost,
+      86              UpgradeType.Worker     => UpgradeManager.Instance.W
+          orkerHireCost,
+      87              UpgradeType.DeskWorker => UpgradeManager.Instance.D
+          eskWorkerHireCost,
+      88 +            UpgradeType.Jail       => UpgradeManager.Instance.J
+         +ailUpgradeCost,                                                
+      89              _                      => 0
+      90          };
+      91      }
+⏺ Update(Assets/Scripts/Zones/UpgradeZone.cs)
+  ⎿  Added 1 line
+       98              UpgradeType.Tool       => UpgradeManager.Instance.
+           ToolLevel >= UpgradeManager.TOOL_MAX_LEVEL,
+       99              UpgradeType.Worker     => UpgradeManager.Instance.
+           HasWorker,
+      100              UpgradeType.DeskWorker => UpgradeManager.Instance.
+           HasDeskWorker,
+      101 +            UpgradeType.Jail       => false, // 감옥은 무제한 
+          +확장                                                          
+      102              _                      => false
+      103          };
+      104      }
+
+⏺ Update(Assets/Scripts/Zones/UpgradeZone.cs)
+  ⎿  Added 7 lines
+      148                      zoneUI.SetCost($"${UpgradeManager.Instance
+           .DeskWorkerHireCost}");
+      149                  }
+      150                  break;
+      151 +                                                              
+      152 +            case UpgradeType.Jail:                            
+      153 +                int jailCount = JailZone.Instance?.Count ?? 0;
+      154 +                int jailCap   = JailZone.Instance?.Capacity ??
+          + 0;                                                           
+      155 +                zoneUI.SetLabel($"Expand Jail ({jailCount}/{ja
+          +ilCap})");                                                    
+      156 +                zoneUI.SetCost($"${UpgradeManager.Instance.Jai
+          +lUpgradeCost}");                                              
+      157 +                break;                                        
+      158          }
+      159      }
+      160  }
+
+⏺ 최종 코드를 확인합니다.
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ 코드가 깔끔하게 정리됐습니다. jailExit 필드가 이제 사용되지 않지만 Inspector
+  참조를 깨지 않기 위해 그대로 두었습니다.
+
+  ---
+  유니티 에디터에서 해야 할 설정:
+
+  1. JailZone 오브젝트 생성
+    - 빈 GameObject에 JailZone 컴포넌트 추가
+    - Jail Origin: 수감자 그리드가 시작될 위치 (빈 Transform)
+    - Cols = 6, Initial Capacity = 30 → 6열 × 5행 = 30슬롯
+    - Upgrade Amount = 15 (한 번 업그레이드 시 슬롯 +15)
+    - Jail Block Prefab: 업그레이드 시 팝업될 감옥 공간 비주얼 프리팹
+  2. 감옥 업그레이드 존
+    - 기존 UpgradeZone에 Upgrade Type = Jail 설정
+  3. UpgradeManager
+    - Jail Upgrade Cost = 50 (기본값으로 이미 설정됨)
+
+  동작 흐름 요약:
+  - 수감자 처리 완료 → JailZone.AcceptPrisoner() → 감옥 슬롯으로 이동 후 정지
+  - 감옥 꽉 참 → 수갑이 아무리 많아도 앞 수감자 처리 중단, 새 수감자 입장 없음
+  - 감옥 업그레이드 존에서 1초 홀드 → TryUpgradeJail() → 새 공간이 "띠용" 스프링
+   애니메이션으로 등장
+
+✻ Worked for 5m 39s
+
+※ recap: 수감자 감옥 시스템 구현 완료. 코드 작업은 끝났고, 유니티 에디터에서 JailZone 오브젝트 생성 및 Inspector 설정을 해주면 됩니다.
+
+❯ zone은 플레이어가 상호작용할 수 있는 걸 말하는 건데 jail은 그냥 공간이지      
+  zone이란 이름을 붙이고 싶진 않는데                                            
+
+⏺ 맞는 말이에요. 프로젝트에 이미 GameManager, UpgradeManager 패턴이 있으니
+  JailManager가 자연스럽겠습니다. 파일명과 참조 전체를 바꾸겠습니다.
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Write(Assets/Scripts/Managers/JailManager.cs)
+  ⎿  Wrote 92 lines to Assets/Scripts/Managers/JailManager.cs
+       2 using System.Collections;
+       3 using System.Collections.Generic;
+       4 
+       5 public class JailManager : MonoBehaviour
+       6 {
+       7     public static JailManager Instance { get; private set; }
+       8 
+       9     [Header("Layout")]
+      10     [SerializeField] Transform jailOrigin;       // 수감자 그리
+         드 시작 위치 (좌하단)
+     … +90 lines (ctrl+o to expand)
+
+⏺ 이제 구 파일 삭제 후 참조 3곳 일괄 수정합니다.
+
+⏺ Bash(rm /Users/nyj500/Unity/PrisonLife/Assets/Scripts/Zones/JailZone.cs
+      /Users/nyj500/Unity/PrisonLife/Assets/Scripts/Zones/JailZone.cs.meta
+      2>/dev/null; echo "done")
+  ⎿  done
+
+⏺ Update(Assets/Scripts/Zones/DeskZone.cs)
+  ⎿  Added 1 line, removed 1 line
+      117  
+      118              // 감옥 수용 인원이 꽉 찼거나 수갑이 부족하면 대기
+            (둘 다 충족돼야 처리)
+      119              yield return new WaitUntil(() =>
+      120 -                !(JailZone.Instance != null && JailZone.Instan
+          -ce.IsFull) &&                                                 
+      120 +                !(JailManager.Instance != null && JailManager.
+          +Instance.IsFull) &&                                           
+      121                  deskHandcuffs.Count >= front.RequiredHandcuffs
+           );
+      122  
+      123              // 수갑 소비
+
+⏺ Update(Assets/Scripts/Zones/DeskZone.cs)
+  ⎿  Added 1 line, removed 1 line
+      145              moneyStackZone?.AddMoney(SpawnMoneyVisual(), money
+           PerPrisoner);
+      146  
+      147              // 감옥으로 이송 (풀 재사용 없이 영구 수감)
+      148 -            JailZone.Instance?.AcceptPrisoner(front);         
+      148 +            JailManager.Instance?.AcceptPrisoner(front);      
+      149  
+      150              // 새 수감자 입장 (뒤에서 걸어오기)
+      151              int lastSlot = queueSlots.Length - 1;
+
+⏺ Update(Assets/Scripts/Managers/UpgradeManager.cs)
+  ⎿  Added 1 line, removed 1 line
+      79      public bool TryUpgradeJail()
+      80      {
+      81          if (!GameManager.Instance.TrySpendMoney(jailUpgradeCost
+          )) return false;
+      82 -        JailZone.Instance?.UpgradeCapacity();                  
+      82 +        JailManager.Instance?.UpgradeCapacity();               
+      83          return true;
+      84      }
+      85  
+
+⏺ Update(Assets/Scripts/Zones/UpgradeZone.cs)
+  ⎿  Added 2 lines, removed 2 lines
+      150                  break;
+      151  
+      152              case UpgradeType.Jail:
+      153 -                int jailCount = JailZone.Instance?.Count ?? 0;
+      154 -                int jailCap   = JailZone.Instance?.Capacity ??
+          - 0;                                                           
+      153 +                int jailCount = JailManager.Instance?.Count ??
+          + 0;                                                           
+      154 +                int jailCap   = JailManager.Instance?.Capacity
+          + ?? 0;                                                        
+      155                  zoneUI.SetLabel($"Expand Jail ({jailCount}/{ja
+           ilCap})");
+      156                  zoneUI.SetCost($"${UpgradeManager.Instance.Jai
+           lUpgradeCost}");
+      157                  break;
+
+⏺ 완료. JailZone.cs → 삭제, JailManager.cs로 새로 생성 (위치:
+  Assets/Scripts/Managers/), 참조 4곳 모두 수정했습니다. 에디터에서 JailZone
+  컴포넌트 대신 JailManager 컴포넌트를 붙이면 됩니다.
+
+✻ Cogitated for 43s
+
+※ recap: Added a jail system where processed prisoners walk to assigned cells and stay. Next: place a JailManager GameObject in the scene and configure its Inspector fields.
+
+❯ 수감자들이 ㄱ자로 이동하면 좋겠어서, 먼저 JailExit로 이동한 후에, Jail 입구로 
+   들어가서 알맞은 jail 자리로 이동했으면 좋겠어                                
+
+⏺ 현재 흐름을 파악하면: 데스크 → jailExit → (감옥 입구) → 셀 위치, 3개 경유지를
+  순서대로 걷는 WalkPath가 필요합니다.
+
+  Read 2 files (ctrl+o to expand)
+
+⏺ PrisonerNPC — WalkToCell 제거하고 WalkPath(다중 경유지) 추가:
+
+⏺ Update(Assets/Scripts/NPC/PrisonerNPC.cs)
+  ⎿  Added 21 lines, removed 3 lines
+      40          StartCoroutine(LeaveRoutine(exitPos, onArrived));
+      41      }
+      42  
+      43 -    // 감옥 셀까지 걸어간 뒤 그 자리에 멈춤                    
+      44 -    public void WalkToCell(Vector3 cellPos)                    
+      43 +    // 여러 경유지를 순서대로 걸어간 뒤 마지막 지점에 멈춤 (ㄱ 
+         +자 이동 등)                                                    
+      44 +    public void WalkPath(Vector3[] waypoints)                  
+      45      {
+      46          isWalking = false;
+      47 -        StartCoroutine(LeaveRoutine(cellPos, null));           
+      47 +        StartCoroutine(WalkPathRoutine(waypoints));            
+      48      }
+      49  
+      50 +    IEnumerator WalkPathRoutine(Vector3[] waypoints)           
+      51 +    {                                                          
+      52 +        const float sqThreshold = 0.1f * 0.1f;                 
+      53 +        foreach (Vector3 wp in waypoints)                      
+      54 +        {                                                      
+      55 +            while (true)                                       
+      56 +            {                                                  
+      57 +                float dx = transform.position.x - wp.x;        
+      58 +                float dz = transform.position.z - wp.z;        
+      59 +                if (dx * dx + dz * dz <= sqThreshold) break;   
+      60 +                Vector3 xzTarget = new Vector3(wp.x, transform.
+         +position.y, wp.z);                                             
+      61 +                transform.position = Vector3.MoveTowards(transf
+         +orm.position, xzTarget, walkSpeed * Time.deltaTime);           
+      62 +                yield return null;                             
+      63 +            }                                                  
+      64 +            transform.position = new Vector3(wp.x, transform.po
+         +sition.y, wp.z);                                               
+      65 +        }                                                      
+      66 +    }                                                          
+      67 +                                                               
+      68      void Update()
+      69      {
+      70          if (!isWalking) return;
+
+⏺ JailManager — jailEntrance 추가, AcceptPrisoner가 jailExit → jailEntrance → 셀
+   경로 조립:
+
+⏺ Update(Assets/Scripts/Managers/JailManager.cs)
+  ⎿  Added 1 line
+       8  
+       9      [Header("Layout")]
+      10      [SerializeField] Transform jailOrigin;       // 수감자 그리
+          드 시작 위치 (좌하단)
+      11 +    [SerializeField] Transform jailEntrance;     // 감옥 입구 —
+         + ㄱ자 이동의 꺾이는 지점                                       
+      12      [SerializeField] int   initialCapacity = 30;
+      13      [SerializeField] int   upgradeAmount   = 15;
+      14      [SerializeField] int   cols            = 6;
+
+⏺ Update(Assets/Scripts/Managers/JailManager.cs)  ⎿  Added 8 lines, removed 3 lines
+      32          GenerateSlots(initialCapacity, animate: false);
+      33      }
+      34  
+      35 -    public void AcceptPrisoner(PrisonerNPC npc)                
+      35 +    // fromExitPos: DeskZone의 jailExit 위치 — 거기서 출발해 입
+         +구 → 셀 순으로 이동                                            
+      36 +    public void AcceptPrisoner(PrisonerNPC npc, Vector3 fromExi
+         +tPos)                                                          
+      37      {
+      38          if (IsFull || npc == null) return;
+      38 -        Vector3 target = slots[prisoners.Count];               
+      39 +        Vector3 cell = slots[prisoners.Count];                 
+      40          prisoners.Add(npc);
+      41          npc.transform.SetParent(transform);
+      41 -        npc.WalkToCell(target);                                
+      42 +                                                               
+      43 +        Vector3[] path = jailEntrance != null                  
+      44 +            ? new[] { fromExitPos, jailEntrance.position, cell 
+         +}                                                              
+      45 +            : new[] { fromExitPos, cell };                     
+      46 +        npc.WalkPath(path);                                    
+      47      }
+      48  
+      49      public void UpgradeCapacity()
+
+⏺ DeskZone — AcceptPrisoner 호출 시 jailExit 위치 전달:
+
+⏺ Update(Assets/Scripts/Zones/DeskZone.cs)
+  ⎿  Added 5 lines, removed 2 lines
+      144  
+      145              moneyStackZone?.AddMoney(SpawnMoneyVisual(), money
+           PerPrisoner);
+      146  
+      147 -            // 감옥으로 이송 (풀 재사용 없이 영구 수감)       
+      148 -            JailManager.Instance?.AcceptPrisoner(front);      
+      147 +            // 감옥으로 이송 — jailExit 경유 후 ㄱ자로 입장   
+      148 +            Vector3 exitPos = jailExit != null                
+      149 +                ? jailExit.position                           
+      150 +                : front.transform.position + Vector3.right * 5
+          +f;                                                            
+      151 +            JailManager.Instance?.AcceptPrisoner(front, exitPo
+          +s);                                                           
+      152  
+      153              // 새 수감자 입장 (뒤에서 걸어오기)
+      154              int lastSlot = queueSlots.Length - 1;
+
+⏺ 완료. 이동 경로는 이렇습니다:
+
+  데스크 → jailExit(DeskZone) → jailEntrance(JailManager) → 셀 위치
+
+  에디터 설정:
+  - JailManager 컴포넌트에 Jail Entrance 필드에 감옥 입구 위치 Transform 연결
+  - jailExit은 기존 DeskZone에 이미 있으니 그대로 사용
+
+  jailEntrance를 비워두면 jailExit → 셀로 직선 이동합니다.
+
+✻ Cogitated for 1m 10s
+
+※ recap: 수감자 시스템 개편 중. 처리된 수감자가 jailExit → jailEntrance → 셀 순으로 ㄱ자 이동 후 감옥에 영구 수감되며, 감옥 수용 인원 초과 시 흐름이 멈추고 업그레이드로 공간이 확장되는 구조까지 코드 완성. 다음은 에디터에서 JailManager 오브젝트 생성 및 jailEntrance Transform 연결.
+
+❯ 수감자가 가는 셀 위치의 순서가 반대로 되게 해줘. 지금 0,0부터 채워지고        
+  있는데, 4,5(마지막)부터 채워지도록                                            
+
+⏺ Update(Assets/Scripts/Managers/JailManager.cs)
+  ⎿  Added 1 line, removed 1 line
+      36      public void AcceptPrisoner(PrisonerNPC npc, Vector3 fromExi
+          tPos)
+      37      {
+      38          if (IsFull || npc == null) return;
+      39 -        Vector3 cell = slots[prisoners.Count];                 
+      39 +        Vector3 cell = slots[slots.Count - 1 - prisoners.Count]
+         +;                                                              
+      40          prisoners.Add(npc);
+      41          npc.transform.SetParent(transform);
+      42  
+
+⏺ slots.Count - 1 - prisoners.Count로 마지막 슬롯부터 역순으로 채워집니다.
+  prisoners.Count는 Add 전에 읽히므로 0번째 수감자 → slots[29], 1번째 →
+  slots[28] 순서가 됩니다.
+
+✻ Baked for 14s
+
+※ recap: 수감자 시스템 개편 중. JailManager로 수감자가 jailExit → 감옥 입구 → 셀(역순)로 ㄱ자 이동하도록 구현 완료. 다음은 유니티 에디터에서 JailManager 오브젝트 배치 및 jailEntrance Transform 연결.
+
+❯ 업그레이드 하면 그 다음부터는 어느 위치에 생성되는거지?                       
+
+⏺ 지금 방식(slots[slots.Count - 1 - prisoners.Count])은 버그가 있어요.
+  업그레이드로 slots.Count가 늘어나는 순간 인덱스가 튀어서 이미 채워진 슬롯을 
+  다시 가리키게 됩니다.
+
+  예시:
+  - 슬롯 30개, 수감자 20명 → slots[9] (정상)
+  - 업그레이드(→ 슬롯 45개), 수감자 여전히 20명 → slots[24] ← 이미 6번째
+  수감자가 차지한 슬롯!
+
+  올바른 방법: 사용 가능한 슬롯 인덱스를 스택으로 관리해서, 항상 가장 마지막
+  슬롯부터 꺼내오는 방식.
+
+  - 초기화: 인덱스 0→29 순서로 push → pop 시 29, 28, ..., 0 순서
+  - 업그레이드: 인덱스 30→44 순서로 push → pop 시 44, 43, ..., 30이 먼저, 그
+  다음 남은 원본 슬롯
+
+⏺ Update(Assets/Scripts/Managers/JailManager.cs)
+  ⎿  Added 4 lines, removed 3 lines
+      18      [Header("Visual")]
+      19      [SerializeField] GameObject jailBlockPrefab; // 업그레이드 
+          시 새로 나타나는 공간 비주얼
+      20  
+      21 -    readonly List<Vector3>     slots     = new List<Vector3>();
+      22 -    readonly List<PrisonerNPC> prisoners = new List<PrisonerNPC
+         ->();                                                           
+      21 +    readonly List<Vector3>     slots            = new List<Vect
+         +or3>();                                                        
+      22 +    readonly List<PrisonerNPC> prisoners        = new List<Pris
+         +onerNPC>();                                                    
+      23 +    readonly Stack<int>        availableIndices = new Stack<int
+         +>();                                                           
+      24  
+      24 -    public bool IsFull   => prisoners.Count >= slots.Count;    
+      25 +    public bool IsFull   => availableIndices.Count == 0;       
+      26      public int  Capacity => slots.Count;
+      27      public int  Count    => prisoners.Count;
+      28  
+
+⏺ Update(Assets/Scripts/Managers/JailManager.cs)
+  ⎿  Added 1 line, removed 1 line
+      37      public void AcceptPrisoner(PrisonerNPC npc, Vector3 fromExi
+          tPos)
+      38      {
+      39          if (IsFull || npc == null) return;
+      40 -        Vector3 cell = slots[slots.Count - 1 - prisoners.Count]
+         -;                                                              
+      40 +        Vector3 cell = slots[availableIndices.Pop()];          
+      41          prisoners.Add(npc);
+      42          npc.transform.SetParent(transform);
+      43  
+
+⏺ 이제 GenerateSlots에서 슬롯 추가 시 인덱스도 스택에 push합니다.
+
+⏺ Update(Assets/Scripts/Managers/JailManager.cs)
+  ⎿  Added 1 line
+      66              int row = idx / cols;
+      67              Vector3 pos = origin + new Vector3(col * spacingX, 
+          0f, row * spacingZ);
+      68              slots.Add(pos);
+      69 +            availableIndices.Push(idx); // 오름차순 push → 높은
+         + 인덱스(마지막 슬롯)가 pop 우선                                
+      70              if (isFirst) { firstNew = pos; isFirst = false; }
+      71              lastNew = pos;
+      72          }
+
+⏺ 이제 업그레이드 후 흐름이 이렇게 됩니다:
+
+  ┌───────────────────┬────────────────────────────┬───────────────────────┐
+  │       상황        │     스택 top → bottom      │       pop 순서        │
+  ├───────────────────┼────────────────────────────┼───────────────────────┤
+  │ 초기(30슬롯)      │ 29, 28, …, 0               │ 29→28→…→0             │
+  ├───────────────────┼────────────────────────────┼───────────────────────┤
+  │ 업그레이드(+15)   │ 44, 43, …, 30, 남은 원본   │ 44→43→…→30→(남은      │
+  │ 후                │ 슬롯                       │ 원본)                 │
+  └───────────────────┴────────────────────────────┴───────────────────────┘
+
+  업그레이드 시 새 공간의 맨 끝부터 채워지고, 그게 다 차면 원본에서 남은 자리를
+  이어서 채웁니다.
+
+✻ Churned for 1m 46s
+
+❯ 감옥 업그레이드 하면 기존의 감옥이 증축되는 방식이거든. 업그레이드 하면       
+  생기는 jail 프리팹의 생성 위치를 조정하고 싶어. 그리고 생성될 때 기존의 벽    
+  하나가 비활성화되게 하고 싶어                                                 
+
+⏺ 두 가지를 Inspector에서 제어할 수 있게 만들겠습니다.
+  - 생성 위치: jailBlockSpawnPoint Transform으로 직접 지정
+  - 벽 비활성화: wallsToDeactivate 배열 — 업그레이드 순서대로 하나씩 꺼짐
+
+⏺ Update(Assets/Scripts/Managers/JailManager.cs)
+  ⎿  Added 6 lines, removed 2 lines
+      15      [SerializeField] float spacingX        = 1.2f;
+      16      [SerializeField] float spacingZ        = 1.2f;
+      17  
+      18 -    [Header("Visual")]                                         
+      19 -    [SerializeField] GameObject jailBlockPrefab; // 업그레이드 
+         -시 새로 나타나는 공간 비주얼                                   
+      18 +    [Header("Upgrade Visual")]                                 
+      19 +    [SerializeField] GameObject  jailBlockPrefab;       // 업그
+         +레이드 시 생성될 감옥 블록 프리팹                              
+      20 +    [SerializeField] Transform   jailBlockSpawnPoint;   // 블록
+         + 생성 위치 (미설정 시 슬롯 중심)                               
+      21 +    [SerializeField] GameObject[] wallsToDeactivate;    // 업그
+         +레이드 순서대로 비활성화할 벽                                  
+      22  
+      23 +    int upgradeCount;                                          
+      24 +                                                               
+      25      readonly List<Vector3>     slots            = new List<Vect
+          or3>();
+      26      readonly List<PrisonerNPC> prisoners        = new List<Pris
+          onerNPC>();
+      27      readonly Stack<int>        availableIndices = new Stack<int
+          >();
+
+⏺ Update(Assets/Scripts/Managers/JailManager.cs)
+  ⎿  Added 5 lines
+      54      public void UpgradeCapacity()
+      55      {
+      56          GenerateSlots(upgradeAmount, animate: true);
+      57 +                                                               
+      58 +        if (wallsToDeactivate != null && upgradeCount < wallsTo
+         +Deactivate.Length)                                             
+      59 +            wallsToDeactivate[upgradeCount]?.SetActive(false); 
+      60 +                                                               
+      61 +        upgradeCount++;                                        
+      62      }
+      63  
+      64      void GenerateSlots(int count, bool animate)
+
+⏺ Update(Assets/Scripts/Managers/JailManager.cs)
+  ⎿  Added 3 lines, removed 1 line
+      82  
+      83          if (animate && jailBlockPrefab != null)
+      84          {
+      85 -            Vector3 blockPos = (firstNew + lastNew) * 0.5f;    
+      85 +            Vector3 blockPos = jailBlockSpawnPoint != null     
+      86 +                ? jailBlockSpawnPoint.position                 
+      87 +                : (firstNew + lastNew) * 0.5f;                 
+      88              GameObject block = Instantiate(jailBlockPrefab, blo
+          ckPos, Quaternion.identity);
+      89              StartCoroutine(PopIn(block.transform));
+      90          }
+
+⏺ 에디터 설정:
+
+  - Jail Block Spawn Point: 새 감옥 블록이 나타날 위치에 빈 Transform 하나 배치
+  후 연결 (미연결 시 슬롯 중심 자동 계산)
+  - Walls To Deactivate: 비활성화할 벽 오브젝트를 배열에 순서대로 연결.
+  업그레이드 1회째에 [0], 2회째에 [1]이 꺼짐
+
+  업그레이드를 여러 번 할 수 있는 경우 배열에 벽을 그 수만큼 등록해두면 됩니다.
+
+✻ Cooked for 33s
+
+※ recap: 감옥 수감자 시스템 구현 중. JailManager에 업그레이드 시 블록 생성 위치(jailBlockSpawnPoint)와 벽 비활성화(wallsToDeactivate 배열) 기능을 추가 완료했으며, 다음은 에디터에서 해당 필드들을 씬 오브젝트에 연결하는 작업입니다.
+
+❯ 아니 그냥 생성이 아니라, 씬에 미리 배치해두고 활성화하는 방식으로 할래.       
+  똑같이 띠용하는 연출은 필요해. 비활성화 할 벽 오브젝트 배열도 필요하고        
+⏺ jailBlockPrefab + spawnPoint 대신 씬에 미리 배치된 jailBlocks[] 배열로
+  교체합니다.
+
+⏺ Update(Assets/Scripts/Managers/JailManager.cs)
+  ⎿  Added 1 line, removed 2 lines
+      16      [SerializeField] float spacingZ        = 1.2f;
+      17  
+      18      [Header("Upgrade Visual")]
+      19 -    [SerializeField] GameObject  jailBlockPrefab;       // 업그
+         -레이드 시 생성될 감옥 블록 프리팹                              
+      20 -    [SerializeField] Transform   jailBlockSpawnPoint;   // 블록
+         - 생성 위치 (미설정 시 슬롯 중심)                               
+      19 +    [SerializeField] GameObject[] jailBlocks;           // 씬에
+         + 미리 배치(비활성화)된 감옥 증축 오브젝트 — 업그레이드 순서대로
+      20      [SerializeField] GameObject[] wallsToDeactivate;    // 업그
+          레이드 순서대로 비활성화할 벽
+      21  
+      22      int upgradeCount;
+
+⏺ Update(Assets/Scripts/Managers/JailManager.cs)
+  ⎿  Added 7 lines, removed 6 lines
+      79              lastNew = pos;
+      80          }
+      81  
+      82 -        if (animate && jailBlockPrefab != null)                
+      82 +        if (animate && jailBlocks != null && upgradeCount < jai
+         +lBlocks.Length)                                                
+      83          {
+      84 -            Vector3 blockPos = jailBlockSpawnPoint != null     
+      85 -                ? jailBlockSpawnPoint.position                 
+      86 -                : (firstNew + lastNew) * 0.5f;                 
+      87 -            GameObject block = Instantiate(jailBlockPrefab, blo
+         -ckPos, Quaternion.identity);                                   
+      88 -            StartCoroutine(PopIn(block.transform));            
+      84 +            GameObject block = jailBlocks[upgradeCount];       
+      85 +            if (block != null)                                 
+      86 +            {                                                  
+      87 +                block.SetActive(true);                         
+      88 +                StartCoroutine(PopIn(block.transform));        
+      89 +            }                                                  
+      90          }
+      91      }
+      92  
+
+⏺ upgradeCount는 벽 비활성화와 블록 활성화 양쪽에서 같은 인덱스를 쓰므로 순서가
+  맞는지 확인합니다.
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ GenerateSlots 안에서 upgradeCount를 읽는데, upgradeCount++는 그 뒤에 있어야
+  합니다. 순서 확인합니다.
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ GenerateSlots에서 upgradeCount를 읽고, 직후 UpgradeCapacity에서 벽 비활성화도
+  같은 upgradeCount로 처리한 뒤 upgradeCount++. 순서가 맞습니다.
+
+  에디터 설정:
+
+  - Jail Blocks: 씬에 미리 배치해둔 증축 오브젝트들을 비활성화 상태로 두고
+  순서대로 배열에 연결. 1회 업그레이드 → [0] 활성화, 2회 → [1] 활성화
+  - Walls To Deactivate: 같은 순서로 비활성화될 벽 오브젝트 연결
+
+✻ Churned for 33s
+
+※ recap: 수감자 시스템 개편 중. 처리된 수감자가 JailManager로 영구 이송되고, 감옥 업그레이드 시 씬에 미리 배치된 증축 오브젝트가 활성화되는 구조까지 완성됨. 다음은 유니티 에디터에서 JailManager 컴포넌트에 Jail Blocks, Walls To Deactivate 배열을 연결하는 것.
+
+❯ 감옥 업그레이드 횟수 2회로 제한해줘. 그리고 지금 prisoner는 collider랑        
+  rigidbody를 가지고 있어서 겹치지 않게 해두었는데, 이러면 수감자들이 감옥에    
+  많아질 수록 충돌이 많아 밖으로 튀어나오거나 다른 수감자 머리 위로 올라가는    
+  현상이 발생해. 어떻게 해결하지?                                               
+
+⏺ 두 가지 해결책입니다:
+
+  업그레이드 제한: JailManager에 MAX_UPGRADES = 2 추가, UpgradeZone의
+  IsMaxed()에 연결.
+
+  물리 충돌 문제: 수감자는 이미 코루틴으로 직접 위치를 제어하고 있어서
+  Rigidbody가 이동에 필요하지 않습니다. 감옥으로 향하는 순간 isKinematic = 
+  true로 전환하면 — 물리 힘을 받지 않으면서 슬롯 위치에 정확히 고정됩니다.
+
+⏺ Update(Assets/Scripts/Managers/JailManager.cs)
+  ⎿  Added 3 lines
+      21  
+      22      int upgradeCount;
+      23  
+      24 +    public const int MAX_UPGRADES    = 2;                      
+      25 +    public bool      IsMaxUpgraded   => upgradeCount >= MAX_UPG
+         +RADES;                                                         
+      26 +                                                               
+      27      readonly List<Vector3>     slots            = new List<Vect
+          or3>();
+      28      readonly List<PrisonerNPC> prisoners        = new List<Pris
+          onerNPC>();
+      29      readonly Stack<int>        availableIndices = new Stack<int
+          >();
+
+⏺ Update(Assets/Scripts/Managers/JailManager.cs)
+  ⎿  Added 1 line
+      55  
+      56      public void UpgradeCapacity()
+      57      {
+      58 +        if (upgradeCount >= MAX_UPGRADES) return;              
+      59          GenerateSlots(upgradeAmount, animate: true);
+      60  
+      61          if (wallsToDeactivate != null && upgradeCount < wallsTo
+          Deactivate.Length)
+
+⏺ UpgradeZone의 IsMaxed()에 감옥 최대 업그레이드 조건 연결:
+
+⏺ Update(Assets/Scripts/Zones/UpgradeZone.cs)
+  ⎿  Added 1 line, removed 1 line
+       98              UpgradeType.Tool       => UpgradeManager.Instance.
+           ToolLevel >= UpgradeManager.TOOL_MAX_LEVEL,
+       99              UpgradeType.Worker     => UpgradeManager.Instance.
+           HasWorker,
+      100              UpgradeType.DeskWorker => UpgradeManager.Instance.
+           HasDeskWorker,
+      101 -            UpgradeType.Jail       => false, // 감옥은 무제한 
+          -확장                                                          
+      101 +            UpgradeType.Jail       => JailManager.Instance?.Is
+          +MaxUpgraded ?? false,                                         
+      102              _                      => false
+      103          };
+      104      }
+
+⏺ 감옥 최대 시 UI 레이블도 처리:
+
+⏺ Update(Assets/Scripts/Zones/UpgradeZone.cs)
+  ⎿  Added 10 lines, removed 2 lines
+      152              case UpgradeType.Jail:
+      153                  int jailCount = JailManager.Instance?.Count ??
+            0;
+      154                  int jailCap   = JailManager.Instance?.Capacity
+            ?? 0;
+      155 -                zoneUI.SetLabel($"Expand Jail ({jailCount}/{ja
+          -ilCap})");                                                    
+      156 -                zoneUI.SetCost($"${UpgradeManager.Instance.Jai
+          -lUpgradeCost}");                                              
+      155 +                if (JailManager.Instance?.IsMaxUpgraded ?? fal
+          +se)                                                           
+      156 +                {                                             
+      157 +                    zoneUI.SetLabel($"Jail MAX ({jailCount}/{j
+          +ailCap})");                                                   
+      158 +                    zoneUI.SetCost("");                       
+      159 +                }                                             
+      160 +                else                                          
+      161 +                {                                             
+      162 +                    zoneUI.SetLabel($"Expand Jail ({jailCount}
+          +/{jailCap})");                                                
+      163 +                    zoneUI.SetCost($"${UpgradeManager.Instance
+          +.JailUpgradeCost}");                                          
+      164 +                }                                             
+      165                  break;
+      166          }
+      167      }
+
+⏺ 이제 WalkPath 시작 시 kinematic으로 전환:
+
+⏺ Update(Assets/Scripts/NPC/PrisonerNPC.cs)
+  ⎿  Added 3 lines
+      44      public void WalkPath(Vector3[] waypoints)
+      45      {
+      46          isWalking = false;
+      47 +        // 감옥 이동부터는 코루틴으로 위치 직접 제어 — Rigidbod
+         +y 물리 비활성화                                                
+      48 +        var rb = GetComponent<Rigidbody>();                    
+      49 +        if (rb != null) rb.isKinematic = true;                 
+      50          StartCoroutine(WalkPathRoutine(waypoints));
+      51      }
+      52  
+
+⏺ 정리하면:
+
+  - 업그레이드 2회 제한: 2회 후 UpgradeZone 게이지가 더 이상 반응 안 하고 "Jail
+  MAX" 표시
+  - 물리 충돌 해결: 감옥으로 출발하는 순간 isKinematic = true 전환 → 다른
+  수감자나 물리 오브젝트로부터 힘을 받지 않고 지정 슬롯에 정확히 고정
+
+  큐에서 대기 중(비kinematic)에는 기존대로 collider가 겹침을 방지하고, 감옥
+  입장부터는 물리를 끄는 방식입니다.
+
+✻ Brewed for 1m 18s
+
+❯ 그럼 어쨋든 감옥 안에서는 이동 시 겹칠 수 있다는 거지?                        
+
+⏺ 맞아요. isKinematic = true는 물리 힘을 끄는 거지, 이동 중 겹침 자체를 막지는
+  못합니다.
+
+  근본적인 해결책: 수감자를 한 명씩 순서대로 입장시키기. JailManager가 입장 큐를
+   관리하고, 앞 수감자가 셀에 도착해야 다음 수감자가 출발합니다. 이를 위해
+  WalkPath에 도착 콜백이 필요합니다.
+
+⏺ Update(Assets/Scripts/NPC/PrisonerNPC.cs)
+  ⎿  Added 5 lines, removed 3 lines
+      41      }
+      42  
+      43      // 여러 경유지를 순서대로 걸어간 뒤 마지막 지점에 멈춤 (ㄱ
+          자 이동 등)
+      44 -    public void WalkPath(Vector3[] waypoints)                  
+      44 +    // onArrived: 마지막 경유지 도착 시 호출                   
+      45 +    public void WalkPath(Vector3[] waypoints, Action onArrived 
+         += null)                                                        
+      46      {
+      47          isWalking = false;
+      48          // 감옥 이동부터는 코루틴으로 위치 직접 제어 — Rigidbod
+          y 물리 비활성화
+      49          var rb = GetComponent<Rigidbody>();
+      50          if (rb != null) rb.isKinematic = true;
+      50 -        StartCoroutine(WalkPathRoutine(waypoints));            
+      51 +        StartCoroutine(WalkPathRoutine(waypoints, onArrived)); 
+      52      }
+      53  
+      53 -    IEnumerator WalkPathRoutine(Vector3[] waypoints)           
+      54 +    IEnumerator WalkPathRoutine(Vector3[] waypoints, Action onA
+         +rrived)                                                        
+      55      {
+      56          const float sqThreshold = 0.1f * 0.1f;
+      57          foreach (Vector3 wp in waypoints)
+     ...
+      67              }
+      68              transform.position = new Vector3(wp.x, transform.po
+          sition.y, wp.z);
+      69          }
+      70 +        onArrived?.Invoke();                                   
+      71      }
+      72  
+      73      void Update()
+
+⏺ 이제 JailManager에 입장 큐 추가:
+
+⏺ Update(Assets/Scripts/Managers/JailManager.cs)
+  ⎿  Added 4 lines
+      28      readonly List<PrisonerNPC> prisoners        = new List<Pris
+          onerNPC>();
+      29      readonly Stack<int>        availableIndices = new Stack<int
+          >();
+      30  
+      31 +    // 한 명씩 순서대로 입장시키기 위한 큐                     
+      32 +    readonly Queue<(PrisonerNPC npc, Vector3[] path)> entryQueu
+         +e = new Queue<(PrisonerNPC, Vector3[])>();                     
+      33 +    bool isProcessingEntry;                                    
+      34 +                                                               
+      35      public bool IsFull   => availableIndices.Count == 0;
+      36      public int  Capacity => slots.Count;
+      37      public int  Count    => prisoners.Count;
+
+⏺ Update(Assets/Scripts/Managers/JailManager.cs)
+  ⎿  Added 17 lines, removed 1 line
+      54          Vector3[] path = jailEntrance != null
+      55              ? new[] { fromExitPos, jailEntrance.position, cell 
+          }
+      56              : new[] { fromExitPos, cell };
+      57 -        npc.WalkPath(path);                                    
+      57 +                                                               
+      58 +        entryQueue.Enqueue((npc, path));                       
+      59 +        if (!isProcessingEntry)                                
+      60 +            StartCoroutine(ProcessEntryQueue());               
+      61      }
+      62  
+      63 +    IEnumerator ProcessEntryQueue()                            
+      64 +    {                                                          
+      65 +        isProcessingEntry = true;                              
+      66 +        while (entryQueue.Count > 0)                           
+      67 +        {                                                      
+      68 +            var (npc, path) = entryQueue.Dequeue();            
+      69 +            bool arrived = false;                              
+      70 +            npc.WalkPath(path, () => arrived = true);          
+      71 +            yield return new WaitUntil(() => arrived);         
+      72 +        }                                                      
+      73 +        isProcessingEntry = false;                             
+      74 +    }                                                          
+      75 +                                                               
+      76      public void UpgradeCapacity()
+      77      {
+      78          if (upgradeCount >= MAX_UPGRADES) return;
+⏺ 이제 이동 흐름은:
+
+  수감자 A 출발 → 셀 도착 콜백 → 수감자 B 출발 → 셀 도착 콜백 → ...
+
+  앞 수감자가 완전히 자리에 앉아야 다음 수감자가 움직이기 시작하므로 이동 중
+  겹침이 원천 차단됩니다. 정지 상태의 슬롯 간 겹침은 Inspector의 spacingX /
+  spacingZ 값으로 캐릭터 크기보다 크게 설정하면 됩니다.
+
+✻ Worked for 1m 3s
+
+※ recap: 수감자 시스템 개편 작업 중. 감옥 입장 순차 처리, 업그레이드 2회 제한, 물리 충돌 방지까지 코드 완료. 다음은 유니티 에디터에서 JailManager 컴포넌트 설정 및 테스트.
+
+❯ 근데 감옥이 뒤쪽으로 커지기 때문에 어차피 겹칠 수밖에 없거든. 그냥 대기시키는 
+   거랑 isKinematic으로 돌린거 취소해줘                                         
+
+⏺ Update(Assets/Scripts/NPC/PrisonerNPC.cs)
+  ⎿  Added 3 lines, removed 8 lines
+      41      }
+      42  
+      43      // 여러 경유지를 순서대로 걸어간 뒤 마지막 지점에 멈춤 (ㄱ
+          자 이동 등)
+      44 -    // onArrived: 마지막 경유지 도착 시 호출                   
+      45 -    public void WalkPath(Vector3[] waypoints, Action onArrived 
+         -= null)                                                        
+      44 +    public void WalkPath(Vector3[] waypoints)                  
+      45      {
+      46          isWalking = false;
+      48 -        // 감옥 이동부터는 코루틴으로 위치 직접 제어 — Rigidbod
+         -y 물리 비활성화                                                
+      49 -        var rb = GetComponent<Rigidbody>();                    
+      50 -        if (rb != null) rb.isKinematic = true;                 
+      51 -        StartCoroutine(WalkPathRoutine(waypoints, onArrived)); 
+      47 +        StartCoroutine(WalkPathRoutine(waypoints));            
+      48      }
+      49  
+      54 -    IEnumerator WalkPathRoutine(Vector3[] waypoints, Action onA
+         -rrived)                                                        
+      50 +    IEnumerator WalkPathRoutine(Vector3[] waypoints)           
+      51      {
+      52          const float sqThreshold = 0.1f * 0.1f;
+      53          foreach (Vector3 wp in waypoints)
+     ...
+      63              }
+      64              transform.position = new Vector3(wp.x, transform.po
+          sition.y, wp.z);
+      65          }
+      70 -        onArrived?.Invoke();                                   
+      66      }
+      67  
+      68      void Update()
+
+⏺ Update(Assets/Scripts/Managers/JailManager.cs)
+  ⎿  Removed 3 lines
+      28      readonly List<PrisonerNPC> prisoners        = new List<Pris
+          onerNPC>();
+      29      readonly Stack<int>        availableIndices = new Stack<int
+          >();
+      30  
+      31 -    // 한 명씩 순서대로 입장시키기 위한 큐                     
+      32 -    readonly Queue<(PrisonerNPC npc, Vector3[] path)> entryQueu
+         -e = new Queue<(PrisonerNPC, Vector3[])>();                     
+      33 -    bool isProcessingEntry;                                    
+      31  
+      32      public bool IsFull   => availableIndices.Count == 0;
+      33      public int  Capacity => slots.Count;
+
+⏺ Update(Assets/Scripts/Managers/JailManager.cs)
+  ⎿  Added 1 line, removed 16 lines
+      52              ? new[] { fromExitPos, jailEntrance.position, cell 
+          }
+      53              : new[] { fromExitPos, cell };
+      54  
+      55 -        entryQueue.Enqueue((npc, path));                       
+      56 -        if (!isProcessingEntry)                                
+      57 -            StartCoroutine(ProcessEntryQueue());               
+      55 +        npc.WalkPath(path);                                    
+      56      }
+      57  
+      60 -    IEnumerator ProcessEntryQueue()                            
+      61 -    {                                                          
+      62 -        isProcessingEntry = true;                              
+      63 -        while (entryQueue.Count > 0)                           
+      64 -        {                                                      
+      65 -            var (npc, path) = entryQueue.Dequeue();            
+      66 -            bool arrived = false;                              
+      67 -            npc.WalkPath(path, () => arrived = true);          
+      68 -            yield return new WaitUntil(() => arrived);         
+      69 -        }                                                      
+      70 -        isProcessingEntry = false;                             
+      71 -    }                                                          
+      72 -                                                               
+      58      public void UpgradeCapacity()
+      59      {
+      60          if (upgradeCount >= MAX_UPGRADES) return;
+
+⏺ 되돌렸습니다. WalkPath에서 isKinematic 제거, JailManager에서 큐·코루틴
+  제거하고 npc.WalkPath(path) 직접 호출로 복구했습니다.
+
+✻ Sautéed for 25s
+
+❯ worker 셋이 일할 때 같은 ore를 두고 데드락이 걸리는 경우가 있거든. 걔네도     
+  서로 충돌해서 이동이 늦어지기도 해서, NavMesh를 써서 Factory waypoint와       
+  MineZone 사이를 이동시키게 하면 어떨까?                                       
+
+⏺ 먼저 WorkerNPC 코드를 읽겠습니다.
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ 현재 구조를 파악했습니다. 두 문제가 있습니다:
+  - 데드락: 세 워커가 같은 광석을 동시에 타겟으로 잡음 → 예약 시스템 필요
+  - 충돌 지연: MoveTowards 직접 위치 제어 → NavMeshAgent로 교체
+
+  OreItem도 확인합니다.
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ 계획:
+  - OreItem: IsReserved 플래그 + Reserve() / Unreserve() 추가 (리스폰 시 초기화)
+  - MineZone.GetNearestOre: 예약된 광석 스킵
+  - WorkerNPC: MoveTo → NavMeshAgent, 이동 전 광석 예약 / 실패 시 해제
+
+⏺ Update(Assets/Scripts/Items/OreItem.cs)
+  ⎿  Added 5 lines, removed 1 line
+       9      Collider[] cols;
+      10      Vector3 originPos;
+      11  
+      12 -    public bool IsMined { get; private set; }                  
+      12 +    public bool IsMined      { get; private set; }             
+      13 +    public bool IsReserved   { get; private set; }             
+      14  
+      15 +    public void Reserve()   => IsReserved = true;              
+      16 +    public void Unreserve() => IsReserved = false;             
+      17 +                                                               
+      18      void Awake()
+      19      {
+      20          originPos = transform.position;
+
+⏺ Update(Assets/Scripts/Items/OreItem.cs)
+  ⎿  Added 1 line
+      42          transform.position = originPos;
+      43          SetVisible(true);
+      44          IsMined = false;
+      45 +        IsReserved = false;                                    
+      46      }
+      47  }
+
+⏺ Update(Assets/Scripts/Zones/MineZone.cs)
+  ⎿  Added 1 line, removed 1 line
+      156          float minSqr = range * range;
+      157          foreach (var ore in ores)
+      158          {
+      159 -            if (ore == null || ore.IsMined) continue;         
+      159 +            if (ore == null || ore.IsMined || ore.IsReserved) 
+          +continue;                                                     
+      160              float sq = XZSqrDist(fromPos, ore.transform.positi
+           on);
+      161              if (sq < minSqr) { minSqr = sq; nearest = ore; }
+      162          }
+
+⏺ 이제 WorkerNPC를 NavMeshAgent 기반으로 교체합니다.
+
+⏺ Write(Assets/Scripts/NPC/WorkerNPC.cs)
+  ⎿  Added 23 lines, removed 26 lines
+       1  using UnityEngine;
+       2 +using UnityEngine.AI;                                          
+       3  using System.Collections;
+       4  using System.Collections.Generic;
+       5  
+       6  public class WorkerNPC : MonoBehaviour
+       7  {
+       8      [Header("References")]
+       8 -    [SerializeField] MineZone mineZone;                        
+       9 +    [SerializeField] MineZone         mineZone;                
+      10      [SerializeField] ManufacturingZone manufacturingZone;
+      10 -    [SerializeField] Transform factoryWaypoint;                
+      11 +    [SerializeField] Transform         factoryWaypoint;        
+      12  
+      13      [Header("Tuning")]
+      14      [SerializeField] int   carryCapacity   = 5;
+     ...
+      18      [SerializeField] float carryBaseHeight = 1.5f;
+      19      [SerializeField] float carrySpacing    = 0.2f;
+      20  
+      21 +    NavMeshAgent agent;                                        
+      22      readonly List<GameObject> carryStack = new List<GameObject>
+          ();
+      23  
+      24 +    void Awake()                                               
+      25 +    {                                                          
+      26 +        agent = GetComponent<NavMeshAgent>();                  
+      27 +    }                                                          
+      28 +                                                               
+      29      public void Activate()
+      30      {
+      31          gameObject.SetActive(true);
+      32 +        agent.speed = walkSpeed;                               
+      33          StartCoroutine(WorkLoop());
+      34      }
+      35  
+     ...
+      46  
+      47      IEnumerator WorkLoop()
+      48      {
+      41 -        yield return null; // StartCoroutine이 즉시 반환되도록 
+         -먼저 yield                                                     
+      49 +        yield return null;                                     
+      50  
+      51          while (true)
+      52          {
+     ...
+      60              // ── 채굴 단계 ────────────────────────────────
+      61              while (carryStack.Count < carryCapacity)
+      62              {
+      55 -                // 가장 가까운 채굴 가능 광석 탐색             
+      63                  OreItem ore = mineZone.GetNearestOre(transform.
+          position, float.MaxValue);
+      64                  if (ore == null) { yield return new WaitForSeco
+          nds(1f); continue; }
+      65  
+      59 -                // 광석 위치로 이동                            
+      66 +                ore.Reserve(); // 다른 워커가 같은 광석을 목표 
+         +로 잡지 않도록 예약                                            
+      67 +                                                               
+      68                  yield return StartCoroutine(MoveTo(ore.transfor
+          m.position));
+      69  
+      62 -                // 이동하는 동안 다른 NPC가 먼저 채굴했을 수 있
+         -음                                                             
+      63 -                if (ore.IsMined) continue;                     
+      70 +                // 도착 전 리스폰·선점 됐을 경우               
+      71 +                if (ore.IsMined) { ore.Unreserve(); continue; }
+      72  
+      65 -                // 채굴                                        
+      73                  yield return new WaitForSeconds(mineInterval);
+      67 -                if (ore.IsMined) continue;                     
+      74 +                if (ore.IsMined) { ore.Unreserve(); continue; }
+      75  
+      69 -                ore.Mine();                                    
+      76 +                ore.Mine(); // Mine() 이후 리스폰 시 IsReserved
+         + 자동 초기화                                                   
+      77                  GameObject vis = ItemVisualPool.Instance.GetOre
+          (
+      78                      transform.position + Vector3.up * 0.5f);
+      79                  carryStack.Add(vis);
+     ...
+       95  
+       96      IEnumerator MoveTo(Vector3 target)
+       97      {
+       91 -        while (true)                                          
+       92 -        {                                                     
+       93 -            float dx = transform.position.x - target.x;       
+       94 -            float dz = transform.position.z - target.z;       
+       95 -            if (dx * dx + dz * dz <= 0.05f * 0.05f) break;    
+       96 -                                                              
+       97 -            Vector3 xzTarget = new Vector3(target.x, transform
+          -.position.y, target.z);                                       
+       98 -            Vector3 dir = xzTarget - transform.position;      
+       99 -            if (dir.sqrMagnitude > 0.001f)                    
+      100 -                transform.rotation = Quaternion.Slerp(transfor
+          -m.rotation,                                                   
+      101 -                    Quaternion.LookRotation(dir.normalized), 1
+          -0f * Time.deltaTime);                                         
+      102 -                                                              
+      103 -            transform.position = Vector3.MoveTowards(         
+      104 -                transform.position, xzTarget, walkSpeed * Time
+          -.deltaTime);                                                  
+      105 -            yield return null;                                
+      106 -        }                                                     
+       98 +        agent.SetDestination(target);                         
+       99 +        yield return null; // pathPending 갱신 대기           
+      100 +        yield return new WaitUntil(() =>                      
+      101 +            !agent.pathPending &&                             
+      102 +            (agent.remainingDistance <= agent.stoppingDistance
+          + + 0.05f ||                                                   
+      103 +             agent.pathStatus == NavMeshPathStatus.PathInvalid
+          +));                                                           
+      104      }
+      105  }
+
+⏺ 에디터 설정:
+
+  WorkerNPC 프리팹(또는 씬 오브젝트)에:
+  1. NavMeshAgent 컴포넌트 추가 — Speed는 코드에서 walkSpeed로 덮어씀. Stopping 
+  Distance = 0.3~0.5 정도로 설정
+  2. 씬에 NavMesh Bake — Window → AI → Navigation에서 MineZone 바닥과 경로 전체
+  bake
+
+  이렇게 하면:
+  - 세 워커가 각각 다른 광석을 예약해서 데드락 없이 분산 채굴
+  - NavMeshAgent가 서로를 장애물로 인식해 밀리거나 겹치지 않고 우회
+
+✻ Churned for 1m 23s
+
+※ recap: Prison Life idle game with prisoner/jail/worker systems. Just added NavMesh-based WorkerNPC movement with ore reservation to fix deadlock and collision issues. Next: bake NavMesh in the Unity editor and add NavMeshAgent components to WorkerNPC objects.
+
+❯ 워커가 일하는 방식 프로세스 설명해줘                                          
+
+⏺ WorkerNPC 루프 (WorkLoop)
+
+  [채굴 단계] carryCapacity(5개)가 찰 때까지 반복
+    1. MineZone에서 자신 위치 기준 가장 가까운 미채굴·미예약 광석 탐색
+    2. 광석 예약 (다른 워커가 같은 걸 안 잡도록)
+    3. 광석 위치로 NavMesh 이동
+    4. mineInterval(1초) 대기 (채굴 모션)
+    5. ore.Mine() → 광석 비활성화, 리스폰 타이머 시작
+    6. 인벤토리(carryStack)에 광석 비주얼 추가
+    7. 5개 찰 때까지 1~6 반복
+
+  [납품 단계]
+    8. factoryWaypoint로 NavMesh 이동
+    9. ManufacturingZone.ReceiveOre() 호출 — depositInterval마다 1개씩
+    10. 다 비우면 다시 [채굴 단계]로
+
+  데드락 방지 흐름 (워커 3명 동시)
+
+  워커A: ore[29] 예약 → 이동 중
+  워커B: ore[29] 스킵(예약됨) → ore[28] 예약 → 이동 중
+  워커C: ore[28],[29] 스킵 → ore[27] 예약 → 이동 중
+
+  도착 전에 광석이 리스폰돼서 다른 워커가 먼저 채굴한 경우 → ore.Unreserve() 후
+  다음 광석 재탐색.
+
+  이동 중 carryStack 시각 처리 (LateUpdate)
+
+  광석 비주얼이 워커 머리 위에 쌓이도록 매 프레임 Lerp로 따라옴. 이동 중에도
+  광석이 워커를 따라다니는 연출.
+
+✻ Crunched for 10s
+
+❯ 광석 또는 팩토리 웨이포인트로 잘 이동이 됐는지는 코등서  어떻게 확인해?       
+⏺ MoveTo 코루틴의 WaitUntil 조건이 그 역할입니다.
+
+  IEnumerator MoveTo(Vector3 target)
+  {
+      agent.SetDestination(target);
+      yield return null; // 1프레임 대기 — pathPending이 true로 세팅되는 타이밍
+      yield return new WaitUntil(() =>
+          !agent.pathPending &&                                          // 경로
+   계산 완료
+          (agent.remainingDistance <= agent.stoppingDistance + 0.05f || // 
+  목적지에 충분히 가까움
+           agent.pathStatus == NavMeshPathStatus.PathInvalid));          // 또는
+   경로 못 찾음(포기)
+  }
+
+  - agent.pathPending — NavMesh가 경로를 아직 계산 중이면 true. false가 될
+  때까지 대기
+  - agent.remainingDistance — 목적지까지 남은 경로 거리. stoppingDistance + 
+  0.05f 이하면 도착으로 판단
+  - PathInvalid — NavMesh 위에 목적지가 없거나 경로를 아낼 수 없을 때. 무한
+  대기를 막기 위한 탈출 조건
+
+  WaitUntil이 끝나면 MoveTo가 반환되고, 다음 줄(ore.IsMined 체크 또는 납품
+  루프)이 실행됩니다.
+
+  한 가지 주의할 점은 광석이 NavMesh 위에 정확히 있지 않으면 PathInvalid로 즉시
+  빠져나와 채굴 없이 다음 광석을 탐색하게 됩니다. 광석들이 NavMesh bake 범위
+  안에 있는지 확인이 필요합니다.
+
+✻ Baked for 10s
+
+※ recap: 감옥 수감자 시스템과 WorkerNPC 개선 작업 중. 마지막으로 WorkerNPC NavMesh 이동 도착 확인 로직을 설명했고, 다음은 NavMesh bake 및 에디터 설정 확인이 필요합니다.
+
+❯ 수감자가 30씩 제한이니까 그 30명과 30명 사이 공간을 띄고 싶어. 그 spacing은   
+  에디터에서 조절 가능하게 해줘.                                                
+
+⏺ 블록별 Z offset을 추가해야 합니다. 현재 슬롯 위치는 전체 인덱스 기준으로 연속
+  계산하는데, GenerateSlots 호출 횟수(blockCount)에 blockGap을 곱해서 Z에 더하면
+   됩니다.
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ blockGap과 blockCount를 추가하고 슬롯 Z 계산에 반영합니다.
+
+  - blockCount: GenerateSlots 호출 횟수 (초기 포함) — 갭 누적용
+  - globalRowOffset: 이전 블록들의 행 수 — 연속성 유지
+  - localRow: 현재 블록 안에서의 행 번호
+
+⏺ Update(Assets/Scripts/Managers/JailManager.cs)
+  ⎿  Added 1 line
+      14      [SerializeField] int   cols            = 6;
+      15      [SerializeField] float spacingX        = 1.2f;
+      16      [SerializeField] float spacingZ        = 1.2f;
+      17 +    [SerializeField] float blockGap        = 2f;   // 블록 간  
+         +추가 Z 간격                                                    
+      18  
+      19      [Header("Upgrade Visual")]
+      20      [SerializeField] GameObject[] jailBlocks;           // 씬에
+           미리 배치(비활성화)된 감옥 증축 오브젝트 — 업그레이드 순서대로
+
+⏺ Update(Assets/Scripts/Managers/JailManager.cs)
+  ⎿  Added 1 line
+      21      [SerializeField] GameObject[] wallsToDeactivate;    // 업그
+          레이드 순서대로 비활성화할 벽
+      22  
+      23      int upgradeCount;
+      24 +    int blockCount;   // GenerateSlots 호출 횟수 (초기 포함) — 
+         +blockGap 누적 계산용                                           
+      25  
+      26      public const int MAX_UPGRADES    = 2;
+      27      public bool      IsMaxUpgraded   => upgradeCount >= MAX_UPG
+          RADES;
+
+⏺ Update(Assets/Scripts/Managers/JailManager.cs)
+  ⎿  Added 14 lines, removed 7 lines
+      70  
+      71      void GenerateSlots(int count, bool animate)
+      72      {
+      73 -        Vector3 origin = jailOrigin != null ? jailOrigin.positi
+         -on : transform.position;                                       
+      74 -        int startIndex = slots.Count;                          
+      73 +        Vector3 origin         = jailOrigin != null ? jailOrigi
+         +n.position : transform.position;                               
+      74 +        int     startIndex     = slots.Count;                  
+      75 +        int     globalRowOffset = startIndex / cols;   // 이전 
+         +블록들의 누적 행 수                                            
+      76 +        float   blockZOffset   = blockCount * blockGap; // 블록
+         + 간 갭 누적                                                    
+      77  
+      78          Vector3 firstNew = origin, lastNew = origin;
+      79          bool isFirst = true;
+      80          for (int i = 0; i < count; i++)
+      81          {
+      80 -            int idx = startIndex + i;                          
+      81 -            int col = idx % cols;                              
+      82 -            int row = idx / cols;                              
+      83 -            Vector3 pos = origin + new Vector3(col * spacingX, 
+         -0f, row * spacingZ);                                           
+      82 +            int globalIdx = startIndex + i;                    
+      83 +            int col       = globalIdx % cols;                  
+      84 +            int localRow  = i / cols;                  // 이 블
+         +록 안에서의 행 번호                                            
+      85 +            Vector3 pos = origin + new Vector3(                
+      86 +                col * spacingX,                                
+      87 +                0f,                                            
+      88 +                (globalRowOffset + localRow) * spacingZ + block
+         +ZOffset);                                                      
+      89              slots.Add(pos);
+      85 -            availableIndices.Push(idx); // 오름차순 push → 높은
+         - 인덱스(마지막 슬롯)가 pop 우선                                
+      90 +            availableIndices.Push(globalIdx);                  
+      91              if (isFirst) { firstNew = pos; isFirst = false; }
+      92              lastNew = pos;
+      93          }
+     ...
+      101                  StartCoroutine(PopIn(block.transform));
+      102              }
+      103          }
+      104 +                                                              
+      105 +        blockCount++;                                         
+      106      }
+      107  
+      108      IEnumerator PopIn(Transform t)
+
+⏺ 결과 예시 (cols=6, spacingZ=1.2, blockGap=2):
+
+  ┌────────────────────┬───────┬─────────────┐
+  │        블록        │  행   │   Z 위치    │
+  ├────────────────────┼───────┼─────────────┤
+  │ 초기 (30명)        │ 0~4행 │ 0 ~ 4.8     │
+  ├────────────────────┼───────┼─────────────┤
+  │ (갭)               │       │ +2.0        │
+  ├────────────────────┼───────┼─────────────┤
+  │ 업그레이드1 (15명) │ 5~6행 │ 8.0 ~ 9.2   │
+  ├────────────────────┼───────┼─────────────┤
+  │ (갭)               │       │ +2.0        │
+  ├────────────────────┼───────┼─────────────┤
+  │ 업그레이드2 (15명) │ 7~8행 │ 12.4 ~ 13.6 │
+  └────────────────────┴───────┴─────────────┘
+
+  Inspector에서 Block Gap 값을 조절하면 블록 사이 공간이 바뀝니다.
+
+✻ Churned for 1m 22s
+
+❯ 조이스틱을 handle만 구현했는데 일반적인 조이스틱처럼 백그라운드이미지         
+  추가해줘                                                                      
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ 터치 시 background도 같은 위치에 나타나고, 뗄 때 같이 숨기면 됩니다.
+
+⏺ Write(Assets/Scripts/UI/VirtualJoystick.cs)
+  ⎿  Added 17 lines, removed 16 lines
+       1  using UnityEngine;
+       2  using UnityEngine.EventSystems;
+       3  
+       4 -// 터치한 자리에 핸들이 나타나고, 드래그로 이동 방향을 결정하는
+         - 조이스틱                                                      
+       5 -// Canvas 직계 자식인 Handle Image 하나만 필요 (배경 이미지 불 
+         -필요)                                                          
+       4 +// 터치한 자리에 배경+핸들이 나타나고, 드래그로 이동 방향을 결 
+         +정하는 조이스틱                                                
+       5  public class VirtualJoystick : MonoBehaviour, IPointerDownHandl
+          er, IDragHandler, IPointerUpHandler
+       6  {
+       8 -    [SerializeField] RectTransform handle;   // Canvas 직계 자 
+         -식 Image                                                       
+       9 -    [SerializeField] float radius = 80f;     // 핸들 최대 이동 
+         -반경 (px, 기준 해상도 기준)                                    
+       7 +    [SerializeField] RectTransform background; // 배경 원 이미 
+         +지                                                             
+       8 +    [SerializeField] RectTransform handle;     // 핸들 이미지  
+       9 +    [SerializeField] float radius = 80f;       // 핸들 최대 이 
+         +동 반경 (px, 기준 해상도 기준)                                 
+      10  
+      11      Canvas rootCanvas;
+      12      Vector2 touchStartScreenPos;
+     ...
+      16      void Awake()
+      17      {
+      18          rootCanvas = GetComponentInParent<Canvas>();
+      19 -        if (handle != null) handle.gameObject.SetActive(false);
+      19 +        if (background != null) background.gameObject.SetActive
+         +(false);                                                       
+      20 +        if (handle != null)     handle.gameObject.SetActive(fal
+         +se);                                                           
+      21      }
+      22  
+      23      public void OnPointerDown(PointerEventData eventData)
+      24      {
+      25          touchStartScreenPos = eventData.position;
+      25 -        if (handle != null) handle.gameObject.SetActive(true); 
+      26 -        PlaceHandle(eventData.position);                       
+      26 +        PlaceAt(background, eventData.position);               
+      27 +        PlaceAt(handle, eventData.position);                   
+      28 +        if (background != null) background.gameObject.SetActive
+         +(true);                                                        
+      29 +        if (handle != null)     handle.gameObject.SetActive(tru
+         +e);                                                            
+      30          Direction = Vector2.zero;
+      31      }
+      32  
+      33      public void OnDrag(PointerEventData eventData)
+      34      {
+      32 -        Vector2 delta = eventData.position - touchStartScreenPo
+         -s;                                                             
+      35 +        Vector2 delta   = eventData.position - touchStartScreen
+         +Pos;                                                           
+      36          Vector2 clamped = Vector2.ClampMagnitude(delta, radius)
+          ;
+      34 -        PlaceHandle(touchStartScreenPos + clamped);            
+      37 +        PlaceAt(handle, touchStartScreenPos + clamped);        
+      38          Direction = clamped / radius;
+      39      }
+      40  
+      41      public void OnPointerUp(PointerEventData eventData)
+      42      {
+      40 -        if (handle != null) handle.gameObject.SetActive(false);
+      43 +        if (background != null) background.gameObject.SetActive
+         +(false);                                                       
+      44 +        if (handle != null)     handle.gameObject.SetActive(fal
+         +se);                                                           
+      45          Direction = Vector2.zero;
+      46      }
+      47  
+      44 -    // 스크린 좌표 → Canvas 월드 좌표로 핸들 배치 (부모 무관하 
+         -게 정확히 위치함)                                              
+      45 -    void PlaceHandle(Vector2 screenPos)                        
+      48 +    void PlaceAt(RectTransform rt, Vector2 screenPos)          
+      49      {
+      47 -        if (handle == null || rootCanvas == null) return;      
+      50 +        if (rt == null || rootCanvas == null) return;          
+      51          Camera cam = rootCanvas.renderMode == RenderMode.Screen
+          SpaceOverlay ? null : rootCanvas.worldCamera;
+      52          if (RectTransformUtility.ScreenPointToWorldPointInRecta
+          ngle(
+      53                  (RectTransform)rootCanvas.transform, screenPos,
+           cam, out Vector3 worldPos))
+      51 -        {                                                      
+      52 -            handle.position = worldPos;                        
+      53 -        }                                                      
+      54 +            rt.position = worldPos;                            
+      55      }
+      56  }
+
+⏺ 에디터 설정:
+
+  Canvas 계층 구조:
+  VirtualJoystick (이 컴포넌트 부착)
+  ├── Background (Image — 원형, 반투명)
+  └── Handle (Image — 작은 원)
+
+  - Background 필드에 배경 Image의 RectTransform 연결
+  - Handle 필드에 핸들 Image의 RectTransform 연결
+  - radius는 배경 이미지 반지름(px)과 맞춰주면 핸들이 배경 밖으로 안 나감
+
+✻ Worked for 23s
+
+※ recap: Prison Life idle game in Unity 6. Implemented jail prisoner system with capacity limits, upgrade expansion, NavMesh worker pathfinding with ore reservation, and joystick background. Next: editor setup and playtesting.
+
+❯ WorkerNPC도 플레이어처럼 Mine, Walk 애니메이션 상태를 가져. 채굴할 땐 Mine,   
+  그 외엔 Walk가 적용되도록 수정해줘                                            
+
+⏺ PlayerAnimator 먼저 확인합니다.
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ PlayerAnimator와 같은 파라미터(Speed, Mine)를 사용합니다. WorkerNPC에 직접
+  Animator 제어를 추가하면 됩니다.
+
+  - Walk: agent.velocity가 있을 때 Speed = 1, 없으면 0
+  - Mine: 채굴 대기(mineInterval) 직전에 Mine 트리거
+
+⏺ Update(Assets/Scripts/NPC/WorkerNPC.cs)
+  ⎿  Added 5 lines
+      18      [SerializeField] float carryBaseHeight = 1.5f;
+      19      [SerializeField] float carrySpacing    = 0.2f;
+      20  
+      21 +    static readonly int SpeedHash = Animator.StringToHash("Spee
+         +d");                                                           
+      22 +    static readonly int MineHash  = Animator.StringToHash("Mine
+         +");                                                            
+      23 +                                                               
+      24      NavMeshAgent agent;
+      25 +    Animator     anim;                                         
+      26      readonly List<GameObject> carryStack = new List<GameObject>
+          ();
+      27  
+      28      void Awake()
+      29      {
+      30          agent = GetComponent<NavMeshAgent>();
+      31 +        anim  = GetComponentInChildren<Animator>();            
+      32      }
+      33  
+      34      public void Activate()
+
+⏺ Update(Assets/Scripts/NPC/WorkerNPC.cs)
+  ⎿  Added 2 lines
+      40  
+      41      void LateUpdate()
+      42      {
+      43 +        anim?.SetFloat(SpeedHash, agent.velocity.sqrMagnitude >
+         + 0.01f ? 1f : 0f);                                             
+      44 +                                                               
+      45          for (int i = 0; i < carryStack.Count; i++)
+      46          {
+      47              if (carryStack[i] == null) continue;
+
+⏺ Update(Assets/Scripts/NPC/WorkerNPC.cs)
+  ⎿  Added 1 line
+      77                  // 도착 전 리스폰·선점 됐을 경우
+      78                  if (ore.IsMined) { ore.Unreserve(); continue; }
+      79  
+      80 +                anim?.SetTrigger(MineHash);                    
+      81                  yield return new WaitForSeconds(mineInterval);
+      82                  if (ore.IsMined) { ore.Unreserve(); continue; }
+      83  
+
+⏺ 완료. Animator Controller는 플레이어와 동일하게 Speed(float)와 Mine(trigger)
+  파라미터를 사용하면 됩니다. 이미 플레이어용 Controller가 있다면 그대로 재사용
+  가능합니다.
+✻ Cooked for 29s
+
+※ recap: Prison Life idle game. Last task: added Walk/Mine animation states to WorkerNPC using NavMeshAgent velocity for Speed and Mine trigger before mineInterval. Next: any new feature or fix you need.
+
+❯ 플레이어 애니메이터 수정 사항: 이제 Mine 애니메이션은 3가지가 존재. tool      
+  레벨마다 알맞은 도구를 active하고 알맞은 애니메이션을 실행시켜야 해. 레벨     
+  1,2,3의 도구와 애니메이션은 준비되어 있어                                     
+
+⏺ MineZone과 같은 패턴으로 OnToolUpgraded 이벤트를 구독해 도구 활성화와
+  애니메이션 레벨 파라미터를 동기화합니다.
+
+⏺ Write(Assets/Scripts/Player/PlayerAnimator.cs)
+  ⎿  Added 32 lines, removed 6 lines
+       2  
+       3  public class PlayerAnimator : MonoBehaviour
+       4  {
+       5 -    static readonly int SpeedHash = Animator.StringToHash("Spee
+         -d");                                                           
+       6 -    static readonly int MineHash = Animator.StringToHash("Mine"
+         -);                                                             
+       7 -    static readonly int PickupHash = Animator.StringToHash("Pic
+         -kup");                                                         
+       5 +    static readonly int SpeedHash     = Animator.StringToHash("
+         +Speed");                                                       
+       6 +    static readonly int MineHash      = Animator.StringToHash("
+         +Mine");                                                        
+       7 +    static readonly int MineLevelHash = Animator.StringToHash("
+         +MineLevel");                                                   
+       8 +    static readonly int PickupHash    = Animator.StringToHash("
+         +Pickup");                                                      
+       9  
+       9 -    Animator anim;                                             
+      10 +    [SerializeField] GameObject[] tools; // index 0 = Lv1, 1 = 
+         +Lv2, 2 = Lv3                                                   
+      11 +                                                               
+      12 +    Animator         anim;                                     
+      13      PlayerController controller;
+      14  
+      15      void Awake()
+      16      {
+      14 -        anim = GetComponent<Animator>();                       
+      17 +        anim       = GetComponent<Animator>();                 
+      18          controller = GetComponentInParent<PlayerController>();
+      19      }
+      20  
+      21 +    void Start()                                               
+      22 +    {                                                          
+      23 +        ApplyToolLevel();                                      
+      24 +        if (UpgradeManager.Instance != null)                   
+      25 +            UpgradeManager.Instance.OnToolUpgraded += ApplyTool
+         +Level;                                                         
+      26 +    }                                                          
+      27 +                                                               
+      28 +    void OnDestroy()                                           
+      29 +    {                                                          
+      30 +        if (UpgradeManager.Instance != null)                   
+      31 +            UpgradeManager.Instance.OnToolUpgraded -= ApplyTool
+         +Level;                                                         
+      32 +    }                                                          
+      33 +                                                               
+      34      void Update()
+      35      {
+      36          if (anim == null || controller == null) return;
+      37          anim.SetFloat(SpeedHash, controller.IsMoving ? 1f : 0f)
+          ;
+      38      }
+      39  
+      24 -    public void TriggerMine() => anim?.SetTrigger(MineHash);   
+      40 +    void ApplyToolLevel()                                      
+      41 +    {                                                          
+      42 +        int level = UpgradeManager.Instance != null ? UpgradeMa
+         +nager.Instance.ToolLevel : 1;                                  
+      43 +                                                               
+      44 +        for (int i = 0; i < tools.Length; i++)                 
+      45 +            tools[i]?.SetActive(i == level - 1);               
+      46 +                                                               
+      47 +        anim?.SetInteger(MineLevelHash, level);                
+      48 +    }                                                          
+      49 +                                                               
+      50 +    public void TriggerMine()   => anim?.SetTrigger(MineHash); 
+      51      public void TriggerPickup() => anim?.SetTrigger(PickupHash)
+          ;
+      52  }
+
+⏺ Animator Controller 설정:
+
+  파라미터 2개 추가:
+  - MineLevel (Integer)
+  - Mine (Trigger) — 기존 유지
+
+  Mine 트랜지션 3개 (Any State → Mine_Lv1/2/3):
+
+  ┌───────────────────────────────┬───────────┐
+  │         트랜지션 조건         │ 대상 상태 │
+  ├───────────────────────────────┼───────────┤
+  │ Mine trigger + MineLevel == 1 │ Mine_Lv1  │
+  ├───────────────────────────────┼───────────┤
+  │ Mine trigger + MineLevel == 2 │ Mine_Lv2  │
+  ├───────────────────────────────┼───────────┤
+  │ Mine trigger + MineLevel == 3 │ Mine_Lv3  │
+  └───────────────────────────────┴───────────┘
+
+  Inspector 설정:
+
+  Tools 배열에 도구 GameObject를 순서대로 연결:
+  - [0] → Lv1 도구
+  - [1] → Lv2 도구
+  - [2] → Lv3 도구
+
+  초기(Lv1) 상태는 Start()의 ApplyToolLevel()에서 자동 설정되고, 업그레이드 시
+  OnToolUpgraded 이벤트로 즉시 전환됩니다.
+
+✻ Cogitated for 36s
+
+※ recap: Prison Life mobile idle game. Last task: PlayerAnimator updated to activate the correct tool GameObject and play the matching Mine animation per tool level (Lv1-3) using a MineLevel integer parameter. Next: set up the Animator Controller with three Mine transitions conditioned on MineLevel.
+
+❯ 지금 플레이어 컨트롤러에 tool obj도 레벨 별로 다르게 해야 될 것 같아          
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ toolObject 단일 필드를 제거하고, PlayerAnimator에 이미 있는 tools[] 배열로
+  통합합니다. PlayerController.SetToolActive는 PlayerAnimator에 위임하고,
+  PlayerAnimator가 "MineZone 진입 여부 + 현재 레벨"을 합쳐서 올바른 도구를 켜고
+  끕니다.
+
+  PlayerAnimator — toolActive 상태 추가, SetToolActive 공개:
+
+⏺ Update(Assets/Scripts/Player/PlayerAnimator.cs)
+  ⎿  Added 10 lines, removed 1 line
+      11  
+      12      Animator         anim;
+      13      PlayerController controller;
+      14 +    bool             toolActive;                               
+      15  
+      16      void Awake()
+      17      {
+     ...
+      38          anim.SetFloat(SpeedHash, controller.IsMoving ? 1f : 0f)
+          ;
+      39      }
+      40  
+      41 +    // MineZone 진입/퇴장 시 PlayerController가 호출           
+      42 +    public void SetToolActive(bool active)                     
+      43 +    {                                                          
+      44 +        toolActive = active;                                   
+      45 +        ApplyToolLevel();                                      
+      46 +    }                                                          
+      47 +                                                               
+      48      void ApplyToolLevel()
+      49      {
+      50          int level = UpgradeManager.Instance != null ? UpgradeMa
+          nager.Instance.ToolLevel : 1;
+      51  
+      52 +        // toolActive 상태 + 현재 레벨에 맞는 도구만 활성화    
+      53          for (int i = 0; i < tools.Length; i++)
+      45 -            tools[i]?.SetActive(i == level - 1);               
+      54 +            tools[i]?.SetActive(toolActive && i == level - 1); 
+      55  
+      56          anim?.SetInteger(MineLevelHash, level);
+      57      }
+
+⏺ PlayerController — toolObject 제거, PlayerAnimator에 위임:
+
+⏺ Update(Assets/Scripts/Player/PlayerController.cs)
+  ⎿  Added 2 lines, removed 2 lines
+       6      [SerializeField] float moveSpeed = 5f;
+       7      [SerializeField] VirtualJoystick joystick;
+       8      [SerializeField] Camera gameCamera;
+       9 -    [SerializeField] GameObject toolObject;  // 곡괭이(ArmPivot
+         -) — MineZone 진입 시에만 활성화                                
+       9  
+      11 -    Rigidbody rb;                                              
+      10 +    Rigidbody        rb;                                       
+      11 +    PlayerAnimator   playerAnim;                               
+      12      bool autoMoving;
+      13      Vector3 autoTarget;
+      14      float autoStopDist = 0.5f;
+
+⏺ Update(Assets/Scripts/Player/PlayerController.cs)
+  ⎿  Added 2 lines, removed 2 lines
+      18  
+      19      void Awake()
+      20      {
+      21 -        rb = GetComponent<Rigidbody>();                        
+      21 +        rb         = GetComponent<Rigidbody>();                
+      22 +        playerAnim = GetComponentInChildren<PlayerAnimator>(); 
+      23          rb.freezeRotation = true;
+      24          rb.interpolation = RigidbodyInterpolation.Interpolate;
+      25          if (gameCamera == null) gameCamera = Camera.main;
+      25 -        if (toolObject != null) toolObject.SetActive(false); //
+         - 기본 비활성                                                   
+      26      }
+      27  
+      28      void FixedUpdate()
+
+⏺ Update(Assets/Scripts/Player/PlayerController.cs)
+  ⎿  Added 1 line, removed 1 line
+      104  
+      105      public void SetToolActive(bool active)
+      106      {
+      107 -        if (toolObject != null) toolObject.SetActive(active); 
+      107 +        playerAnim?.SetToolActive(active);                    
+      108      }
+      109  
+      110      public void SetJoystick(VirtualJoystick j) => joystick = j
+           ;
+
+⏺ 완료. 기존 Inspector에서 Tool Object 필드가 사라지고, PlayerAnimator의 Tools
+  배열만 관리하면 됩니다.
+
+  동작 정리:
+  - MineZone 진입: SetToolActive(true) → 현재 레벨 도구만 활성화
+  - MineZone 퇴장: SetToolActive(false) → 모든 도구 비활성화
+  - 도구 업그레이드: OnToolUpgraded → 이전 도구 비활성화 + 새 도구 활성화
+  (MineZone 안에 있을 때만)
+
+✻ Crunched for 57s
+
+※ recap: Prison Life Unity mobile idle game. Last task updated PlayerAnimator and PlayerController to support 3 level-based tools — activate the correct tool object and Mine animation per tool level. Next: assign the 3 tool GameObjects to the Tools array in PlayerAnimator Inspector.
+
+❯ 플레이어가 Mine 존에서 ore 인벤토리가 가득 차있을 때 플레이어 위에 Max라는    
+  UI를 표시해줘                                                                 
+
+⏺ "Max" UI 오브젝트를 플레이어 자식으로 두고 MineZone이 켜고 끄는 방식이 가장
+  깔끔합니다. MineZone은 이미 inventory.CanAddOre를 매 루프마다 체크하고 있으니
+  거기서 같이 갱신합니다.
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(Assets/Scripts/Zones/MineZone.cs)
+  ⎿  Added 3 lines
+      15      [SerializeField] float mineAnimSeconds = 0.5f;
+      16      [SerializeField] float harvestRange = 1.2f;  // 이 범위 안
+          에 광석이 있어야 채굴 가능
+      17  
+      18 +    [Header("UI")]                                             
+      19 +    [SerializeField] GameObject oreMaxUI; // 인벤토리 가득 찼을
+         + 때 플레이어 위에 표시                                         
+      20 +                                                               
+      21      readonly List<OreItem> ores          = new List<OreItem>();
+      22      readonly List<OreItem> inRangeBuffer = new List<OreItem>();
+      23      Coroutine mineLoop;
+
+⏺ 퇴장 시 반드시 숨기고, 루프 안에서 상태 변화마다 갱신합니다.
+
+⏺ Update(Assets/Scripts/Zones/MineZone.cs)
+  ⎿  Added 1 line
+      106      {
+      107          player?.SetToolActive(false); // 곡괭이 비활성화
+      108          if (mineLoop != null) { StopCoroutine(mineLoop); mineL
+           oop = null; }
+      109 +        oreMaxUI?.SetActive(false);                           
+      110      }
+      111  
+      112      // ── 채굴 루프 ──────────────────────────────────────
+
+⏺ Update(Assets/Scripts/Zones/MineZone.cs)
+  ⎿  Added 3 lines, removed 1 line
+      116      {
+      117          while (player != null && inventory != null)
+      118          {
+      119 -            if (!inventory.CanAddOre) { yield return new WaitF
+          -orSeconds(0.25f); continue; }                                 
+      119 +            bool isFull = !inventory.CanAddOre;               
+      120 +            oreMaxUI?.SetActive(isFull);                      
+      121 +            if (isFull) { yield return new WaitForSeconds(0.25
+          +f); continue; }                                               
+      122  
+      123              OreItem nearest = GetNearestInRange(harvestRange);
+      124              if (nearest == null) { yield return new WaitForSec
+           onds(0.1f); continue; }
+
+⏺ 에디터 설정:
+
+  플레이어 계층에 WorldSpace Canvas 추가:
+  Player
+  └── OreMaxUI (WorldSpace Canvas)
+      └── Text (TextMeshPro) — "Max"
+  - Canvas의 Y 위치를 머리 위로 올려놓고 (예: y = 2.5)
+  - MineZone Inspector의 Ore Max UI 필드에 OreMaxUI 오브젝트 연결
+
+  인벤토리가 가득 차면 표시되고, 광석을 납품해서 빈 자리가 생기거나 MineZone을
+  나가면 자동으로 숨겨집니다.
+
+✻ Cooked for 52s
+※ recap: Prison Life idle game. Latest work: Mine zone "Max" UI when ore is full, player animator tool switching by level, WorkerNPC NavMesh movement with ore reservation. No pending code tasks.
+
+❯ 글씨가 항상 카메라 정면을 바라보도록 하려면?                                  
+
+⏺ Billboard 컴포넌트를 만들어 WorldSpace Canvas나 텍스트 오브젝트에 붙이면
+  됩니다. LateUpdate에서 카메라 회전을 그대로 따라가는 방식이 가장 안정적입니다.
+
+⏺ Write(Assets/Scripts/Utils/Billboard.cs)
+  ⎿  Wrote 10 lines to Assets/Scripts/Utils/Billboard.cs
+       1 using UnityEngine;
+       2 
+       3 public class Billboard : MonoBehaviour
+       4 {
+       5     void LateUpdate()
+       6     {
+       7         if (Camera.main == null) return;
+       8         transform.rotation = Camera.main.transform.rotation;
+       9     }
+      10 }
+
+⏺ 카메라를 향해 LookAt하는 방식 대신 카메라 회전을 그대로 복사하는 이유는,
+  LookAt은 카메라 각도에 따라 텍스트가 뒤집히는 경우가 생기기 때문입니다.
+
+  사용법: 항상 정면을 바라봐야 하는 오브젝트(ZoneUI Canvas, OreMaxUI Canvas
+  등)에 Billboard 컴포넌트를 추가하면 됩니다.
+
+✻ Churned for 15s
+
+※ recap: Prison Life Unity 모바일 게임 개발 중. 마지막 작업은 Billboard 유틸리티 컴포넌트 생성이었고, 다음은 에디터에서 WorldSpace Canvas 오브젝트에 Billboard 컴포넌트를 붙이는 것입니다.
+
+❯ 게임이 시작하면 일단 MaxUI를 꺼두어야 해. 그리고 이 UI는 다른 오브젝트에게    
+  가려지지 않고 위에 그려져야 하는데, 캔버스 order layer를 가장 뒤에 놔도       
+  가려지네                                                                      
+
+⏺ 두 가지 별개 문제입니다.
+
+  1. 시작 시 비활성화 — MineZone.Start()에 한 줄 추가:
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(Assets/Scripts/Zones/MineZone.cs)
+  ⎿  Added 1 line
+      75  
+      76      void Start()
+      77      {
+      78 +        oreMaxUI?.SetActive(false);                            
+      79          ApplyToolLevel();
+      80          if (UpgradeManager.Instance != null)
+      81              UpgradeManager.Instance.OnToolUpgraded += ApplyTool
+          Level;
+
+⏺ 2. 항상 위에 그리기 — WorldSpace Canvas에서 Sorting Order는 Canvas끼리의
+  순서만 제어하고, 3D 오브젝트의 depth buffer는 못 이깁니다. 해결책은 TMP
+  머티리얼의 ZTest를 Always로 설정하는 것입니다.
+
+⏺ Write(Assets/Scripts/Utils/AlwaysOnTopUI.cs)
+  ⎿  Wrote 18 lines to Assets/Scripts/Utils/AlwaysOnTopUI.cs
+       2 using UnityEngine.Rendering;
+       3 using TMPro;
+       4 
+       5 // WorldSpace Canvas에 추가하면 3D 오브젝트에 가려지지 않고 항상
+          위에 렌더링됨
+       7 {ublic class AlwaysOnTopUI : MonoBehaviour
+       8     void Awake()
+       9     {
+      10         foreach (var tmp in GetComponentsInChildren<TMP_Text>(tr
+         ue))
+     … +9 lines (ctrl+o to expand)
+
+⏺ 사용법: OreMaxUI Canvas 오브젝트에 AlwaysOnTopUI 컴포넌트를 추가하면 됩니다.
+
+  ZoneUI(업그레이드 존 등) 등 다른 WorldSpace Canvas에도 같은 컴포넌트를 붙이면
+  동일하게 적용됩니다. 단, ZTest Always이므로 벽 뒤에 있어도 텍스트가 보입니다 —
+   머리 위 UI처럼 항상 노출되어야 하는 경우에 적합합니다.
+
+✻ Brewed for 1m 44s
+
+❯ 아니면 그냥 스크린스페이스에 그리고 플레이어가 항상 카메라 가운데에 오니까    
+  그쯤에 놓을까?                                                                
+
+⏺ 그게 훨씬 간단합니다. 코드 변경은 없고 씬 설정만 바꾸면 됩니다.
+
+  현재: Player 자식 → WorldSpace Canvas → "Max" Text
+  변경: Screen Space Overlay Canvas (기존 HUD Canvas) → "Max" Text,
+  RectTransform 위치를 화면 중앙 약간 위로 고정
+
+  1. OreMaxUI를 Player 계층에서 꺼내서 HUD Canvas (Screen Space Overlay) 아래로
+  이동
+  2. RectTransform Anchor를 Center-Middle로 설정, Y 포지션을 플레이어 머리가
+  오는 위치(예: +100~150px)로 조정
+  3. Player에 붙어있던 WorldSpace Canvas 삭제
+  4. Billboard 컴포넌트도 필요 없으므로 제거
+
+  MineZone의 oreMaxUI 필드에 이동된 오브젝트를 다시 연결해주면 됩니다. SetActive
+   코드는 그대로 동작합니다.
+
+✻ Cogitated for 16s
+
+❯ AlwaysOnTopUI.cs 삭제해줘                                                     
+
+⏺ Bash(rm /Users/nyj500/Unity/PrisonLife/Assets/Scripts/Utils/AlwaysOnTopUI.cs
+      /Users/nyj500/Unity/PrisonLife/Assets/Scripts/Utils/AlwaysOnTopUI.cs.meta
+      2>/dev/null; e…)
+  ⎿  done
+
+⏺ 삭제했습니다.
+
+✻ Crunched for 6s
+
+※ recap: Unity 모바일 아이들 게임 PrisonLife 개발 중. 오늘은 수감자 시스템, 감옥 업그레이드, NavMesh 워커, 플레이어 애니메이터 등 여러 기능을 구현했고, 마지막으로 Max UI를 Screen Space로 이동하는 씬 설정이 남아 있습니다.
+
+❯ 간단하긴 한데 좀 어색하네 그냥 다시 빌보드랑 HUD로 해볼래. 그리고 Mine존      
+  벗어나도 인벤토리 Max면 계속 표시해줘                                         
+
+⏺ MineZone에서 꺼내서 PlayerInventory가 직접 관리하도록 변경합니다. 인벤토리
+  상태가 바뀌는 AddOre / RemoveTopOre 시점에 바로 갱신하면 됩니다.
+
+  MineZone에서 oreMaxUI 관련 코드 제거:
+
+⏺ Update(Assets/Scripts/Zones/MineZone.cs)
+  ⎿  Removed 2 lines
+      15      [SerializeField] float mineAnimSeconds = 0.5f;
+      16      [SerializeField] float harvestRange = 1.2f;  // 이 범위 안
+          에 광석이 있어야 채굴 가능
+      17  
+      18 -    [Header("UI")]                                             
+      19 -    [SerializeField] GameObject oreMaxUI; // 인벤토리 가득 찼을
+         - 때 플레이어 위에 표시                                         
+      18  
+      19      readonly List<OreItem> ores          = new List<OreItem>();
+      20      readonly List<OreItem> inRangeBuffer = new List<OreItem>();
+
+⏺ Update(Assets/Scripts/Zones/MineZone.cs)
+  ⎿  Removed 1 line
+      73  
+      74      void Start()
+      75      {
+      76 -        oreMaxUI?.SetActive(false);                            
+      76          ApplyToolLevel();
+      77          if (UpgradeManager.Instance != null)
+      78              UpgradeManager.Instance.OnToolUpgraded += ApplyTool
+          Level;
+
+⏺ Update(Assets/Scripts/Zones/MineZone.cs)
+  ⎿  Removed 1 line
+      104      {
+      105          player?.SetToolActive(false); // 곡괭이 비활성화
+      106          if (mineLoop != null) { StopCoroutine(mineLoop); mineL
+           oop = null; }
+      107 -        oreMaxUI?.SetActive(false);                           
+      107      }
+      108  
+      109      // ── 채굴 루프 ──────────────────────────────────────
+
+⏺ Update(Assets/Scripts/Zones/MineZone.cs)  ⎿  Added 1 line, removed 3 lines
+      113      {
+      114          while (player != null && inventory != null)
+      115          {
+      116 -            bool isFull = !inventory.CanAddOre;               
+      117 -            oreMaxUI?.SetActive(isFull);                      
+      118 -            if (isFull) { yield return new WaitForSeconds(0.25
+          -f); continue; }                                               
+      116 +            if (!inventory.CanAddOre) { yield return new WaitF
+          +orSeconds(0.25f); continue; }                                 
+      117  
+      118              OreItem nearest = GetNearestInRange(harvestRange);
+      119              if (nearest == null) { yield return new WaitForSec
+           onds(0.1f); continue; }
+
+⏺ PlayerInventory에 oreMaxUI 추가:
+
+⏺ Update(Assets/Scripts/Player/PlayerInventory.cs)
+  ⎿  Added 2 lines
+      13      [SerializeField] float itemSpacing  = 0.22f;   // 한 열 안
+          에서 아이템 높이 간격
+      14      [SerializeField] float posLerpSpeed = 14f;
+      15  
+      16 +    [SerializeField] GameObject oreMaxUI; // 광석 인벤토리 가득
+         + 찼을 때 표시 (WorldSpace Billboard)                           
+      17 +                                                               
+      18      public int MaxOre { get; set; } = UpgradeManager.ORE_CAP_LV
+          L1;
+      19  
+      20      readonly List<GameObject> oreStack      = new List<GameObje
+          ct>();
+
+⏺ Update(Assets/Scripts/Player/PlayerInventory.cs)
+  ⎿  Added 2 lines
+      17  
+      18      public int MaxOre { get; set; } = UpgradeManager.ORE_CAP_LV
+          L1;
+      19  
+      20 +    void Awake() => oreMaxUI?.SetActive(false);                
+      21 +                                                               
+      22      readonly List<GameObject> oreStack      = new List<GameObje
+          ct>();
+      23      readonly List<GameObject> handcuffStack = new List<GameObje
+          ct>();
+      24      readonly List<GameObject> moneyStack    = new List<GameObje
+          ct>();
+
+⏺ Update(Assets/Scripts/Player/PlayerInventory.cs)
+  ⎿  Added 2 lines
+      71          if (obj == null) return;
+      72          PlaceAboveSlot(obj, oreStack.Count, col1Z);
+      73          oreStack.Add(obj);
+      74 +        oreMaxUI?.SetActive(!CanAddOre);                       
+      75      }
+      76  
+      77      public GameObject RemoveTopOre()
+     ...
+      80          int last = oreStack.Count - 1;
+      81          var obj = oreStack[last];
+      82          oreStack.RemoveAt(last);
+      83 +        oreMaxUI?.SetActive(!CanAddOre);                       
+      84          return obj;
+      85      }
+      86  
+
+⏺ 에디터 설정:
+  Player
+  └── OreMaxUI (WorldSpace Canvas)
+      ├── Billboard 컴포넌트 추가
+      └── Text (TextMeshPro) — "Max"
+  - PlayerInventory의 Ore Max UI 필드에 연결
+  - Y 위치를 머리 위로 조정 (예: y = 2.5)
+
+  이제 광석이 가득 차는 순간 표시되고, MineZone 밖에서 납품해서 줄어드는 순간
+  꺼집니다.
+
+✻ Brewed for 51s
+
+※ recap: Prison Life idle game for mobile. Last task was restoring the ore Max UI as a WorldSpace Billboard child of the player, controlled by PlayerInventory. Next: connect the OreMaxUI object to PlayerInventory in the Inspector.
+
+❯ 글씨가 카메라를 바라보며 카메라와의 거리를 좁히면 될 것 같아                  
+
+⏺ 카메라 바로 앞에 고정 거리로 배치하면 다른 오브젝트보다 항상 앞에 자연스럽게
+  렌더링됩니다. Billboard를 수정해서 회전뿐 아니라 위치도 카메라 기준으로
+  잡습니다.
+
+⏺ Write(Assets/Scripts/Utils/Billboard.cs)
+  ⎿  Added 15 lines, removed 2 lines
+       2  
+       3  public class Billboard : MonoBehaviour
+       4  {
+       5 +    [SerializeField] float distance  = 3f;    // 카메라와의 거 
+         +리                                                             
+       6 +    [SerializeField] float yOffset   = 0.5f;  // 화면 중심에서 
+         +위로 오프셋 (월드 Y)                                           
+       7 +                                                               
+       8 +    Camera cam;                                                
+       9 +                                                               
+      10 +    void Awake() => cam = Camera.main;                         
+      11 +                                                               
+      12      void LateUpdate()
+      13      {
+       7 -        if (Camera.main == null) return;                       
+       8 -        transform.rotation = Camera.main.transform.rotation;   
+      14 +        if (cam == null) cam = Camera.main;                    
+      15 +        if (cam == null) return;                               
+      16 +                                                               
+      17 +        transform.position = cam.transform.position            
+      18 +            + cam.transform.forward * distance                 
+      19 +            + Vector3.up * yOffset;                            
+      20 +                                                               
+      21 +        transform.rotation = cam.transform.rotation;           
+      22      }
+      23  }
+
+⏺ - distance: 카메라에서 얼마나 앞에 놓을지. 씬의 다른 오브젝트보다 가까우면
+  자동으로 위에 그려짐
+  - yOffset: 화면 정중앙보다 얼마나 위에 띄울지 (플레이어 머리 위치 맞춤)
+
+  distance 값은 카메라의 Near Clip Plane보다 크고, 씬에서 가장 가까운
+  오브젝트보다 작게 설정하면 됩니다.
+
+✻ Crunched for 33s
+
+※ recap: PrisonLife Unity 모바일 게임 개발 중. 마지막 작업은 Billboard 컴포넌트를 카메라 앞 고정 거리에 오브젝트를 배치하도록 수정해 Max UI 가림 문제를 해결한 것. 다음은 에디터에서 distance, yOffset 값을 조정해 위치 확인.
+
+❯ 글씨가 Fade in&out 반복되어 깜빡이는 애니메이션을 적용하고 싶어               
+
+⏺ CanvasGroup의 alpha를 코루틴으로 제어합니다. OnEnable/OnDisable로 오브젝트
+  활성화 시 자동 시작/정지됩니다.
+
+⏺ Write(Assets/Scripts/Utils/UIBlink.cs)
+  ⎿  Wrote 50 lines to Assets/Scripts/Utils/UIBlink.cs
+       2 using System.Collections;
+       3 
+       4 [RequireComponent(typeof(CanvasGroup))]
+       5 public class UIBlink : MonoBehaviour
+       6 {
+       8     [SerializeField] float fadeOutDuration = 0.4f;
+       9     [SerializeField] float holdVisible     = 0.1f; // 완전히 보
+         이는 구간 유지 시간
+      10     [SerializeField] float holdInvisible   = 0.1f; // 완전히 사
+         라지는 구간 유지 시간
+     … +43 lines (ctrl+o to expand)
+
+⏺ OreMaxUI Canvas에 UIBlink 컴포넌트를 추가하면 됩니다. CanvasGroup은 자동으로
+  추가됩니다(RequireComponent).
+
+  - SetActive(true) 시 → OnEnable에서 자동으로 깜빡임 시작
+  - SetActive(false) 시 → OnDisable에서 코루틴 정지, alpha 1로 초기화
+
+  Inspector에서 fadeInDuration, fadeOutDuration, holdVisible, holdInvisible로
+  속도와 리듬을 조절할 수 있습니다.
+
+✻ Baked for 18s
+
+※ recap: Prison Life idle game. Recently added jail prisoner system with capacity/upgrades, NavMesh worker pathfinding with ore reservation, level-based tool animations, and a blinking Max UI above the player. Next: continue any remaining feature requests.
+
+❯ SFX 구현해줘. 소리는 채굴할 때(채굴 속도에 따라 1회 당 1번), 돈 획득할 때,    
+  수갑 획득할 때, Ore 놓을 때, 수갑 놓을 때, 업그레이드 완료될 때, Ore->수갑    
+  생성 완료될 때, 수감자의 요구를 만족시켰을 때. 또한 WorkerNPC,                
+  DeskWorkerNPC가 앞서 말한 일을 할 때에도.                                     
+
+⏺ 관련 파일들을 먼저 읽겠습니다.
+
+  Read 3 files (ctrl+o to expand)
+
+⏺ SFXManager를 만들고 각 파일에 호출을 추가합니다.
+
+⏺ Write(Assets/Scripts/Managers/SFXManager.cs)
+  ⎿  Wrote 53 lines to Assets/Scripts/Managers/SFXManager.cs
+       1 using UnityEngine;
+       2 
+       3 public enum SFXType
+       4 {
+       5     Mine,
+       6     MoneyPickup,
+       7     HandcuffPickup,
+       8     OreDeposit,
+       9     HandcuffDeposit,
+      10     UpgradeComplete,
+     … +44 lines (ctrl+o to expand)
+
+⏺ 이제 각 파일에 호출을 추가합니다. 병렬로 처리합니다.
+
+⏺ Update(Assets/Scripts/Zones/MineZone.cs)
+  ⎿  Added 1 line
+      119              if (nearest == null) { yield return new WaitForSec
+           onds(0.1f); continue; }
+      120  
+      121              playerAnim?.TriggerMine();
+      122 +            SFXManager.Instance?.Play(SFXType.Mine);          
+      123              yield return new WaitForSeconds(mineAnimSeconds);
+      124  
+      125              if (player == null || inventory == null) break;
+
+⏺ Update(Assets/Scripts/NPC/WorkerNPC.cs)
+  ⎿  Added 1 line
+      78                  if (ore.IsMined) { ore.Unreserve(); continue; }
+      79  
+      80                  anim?.SetTrigger(MineHash);
+      81 +                SFXManager.Instance?.Play(SFXType.Mine);       
+      82                  yield return new WaitForSeconds(mineInterval);
+      83                  if (ore.IsMined) { ore.Unreserve(); continue; }
+      84  
+⏺ Update(Assets/Scripts/Zones/MoneyStackZone.cs)
+  ⎿  Added 1 line
+      68  
+      69                  // 플레이어 등 뒤 스택에 시각적으로 추가
+      70                  inventory.AddMoney(top);
+      71 +                SFXManager.Instance?.Play(SFXType.MoneyPickup);
+      72              }
+      73  
+      74              yield return new WaitForSeconds(collectInterval);
+
+⏺ Update(Assets/Scripts/Zones/HandcuffStackZone.cs)
+  ⎿  Added 5 lines, removed 1 line
+      64  
+      65              GameObject top = stack[stack.Count - 1];
+      66              stack.RemoveAt(stack.Count - 1);
+      67 -            if (top != null) inventory.AddHandcuff(top);       
+      67 +            if (top != null)                                   
+      68 +            {                                                  
+      69 +                inventory.AddHandcuff(top);                    
+      70 +                SFXManager.Instance?.Play(SFXType.HandcuffPicku
+         +p);                                                            
+      71 +            }                                                  
+      72  
+      73              yield return new WaitForSeconds(collectInterval);
+      74          }
+
+⏺ Update(Assets/Scripts/Zones/ManufacturingZone.cs)
+  ⎿  Added 1 line
+      91                  GameObject handcuff = SpawnHandcuffVisual(trans
+          form.position);
+      92                  yield return StartCoroutine(AnimateTo(handcuff,
+           handcuffStackZone.StackTopPosition));
+      93                  handcuffStackZone.AddHandcuff(handcuff);
+      94 +                SFXManager.Instance?.Play(SFXType.ManufactureCo
+         +mplete);                                                       
+      95              }
+      96          }
+      97      }
+
+⏺ Ore 놓을 때는 플레이어(DepositLoop)와 WorkerNPC(ReceiveOre) 둘 다
+  ManufacturingZone을 통하므로 거기서 처리합니다.
+
+⏺ Update(Assets/Scripts/Zones/ManufacturingZone.cs)
+  ⎿  Added 1 line
+      120              + Vector3.up * (pendingOres.Count * itemSpacing + 
+           1.5f);
+      121          oreVisual.transform.SetPositionAndRotation(spawnPos, Q
+           uaternion.identity);
+      122          pendingOres.Add(oreVisual);
+      123 +        SFXManager.Instance?.Play(SFXType.OreDeposit);        
+      124      }
+      125  
+      126      GameObject SpawnHandcuffVisual(Vector3 pos)
+
+⏺ Update(Assets/Scripts/Zones/ManufacturingZone.cs)
+  ⎿  Added 1 line
+      67                      + Vector3.up * (pendingOres.Count * itemSpa
+          cing + 1.5f);
+      68                  oreVisual.transform.SetPositionAndRotation(spaw
+          nPos, Quaternion.identity);
+      69                  pendingOres.Add(oreVisual);
+      70 +                SFXManager.Instance?.Play(SFXType.OreDeposit); 
+      71              }
+      72  
+      73              yield return new WaitForSeconds(depositInterval);
+
+⏺ Update(Assets/Scripts/Zones/DeskZone.cs)
+  ⎿  Added 1 line
+       96              {
+       97                  vis.transform.SetPositionAndRotation(DeskStack
+           TopPosition + Vector3.up * 1.5f, Quaternion.identity);
+       98                  deskHandcuffs.Add(vis);
+       99 +                SFXManager.Instance?.Play(SFXType.HandcuffDepo
+          +sit);                                                         
+      100              }
+      101  
+      102              yield return new WaitForSeconds(depositInterval);
+
+⏺ Update(Assets/Scripts/Zones/DeskZone.cs)
+  ⎿  Added 1 line
+      134              }
+      135  
+      136              // --- 처리 완료 ---
+      137 +            SFXManager.Instance?.Play(SFXType.PrisonerSatisfie
+          +d);                                                           
+      138              queue.RemoveAt(0);
+      139  
+      140              for (int i = 0; i < queue.Count && i < queueSlots.
+           Length; i++)
+
+⏺ Update(Assets/Scripts/NPC/DeskWorkerNPC.cs)
+  ⎿  Added 1 line
+      58              {
+      59                  if (!handcuffStackZone.TryTakeHandcuff(out Game
+          Object vis)) break;
+      60                  carryStack.Add(vis);
+      61 +                SFXManager.Instance?.Play(SFXType.HandcuffPicku
+         +p);                                                            
+      62                  yield return new WaitForSeconds(pickupInterval)
+          ;
+      63              }
+      64  
+
+⏺ Update(Assets/Scripts/NPC/DeskWorkerNPC.cs)
+  ⎿  Added 1 line
+      74                  GameObject vis = carryStack[last];
+      75                  carryStack.RemoveAt(last);
+      76                  deskZone.AddHandcuffToDesk(vis);
+      77 +                SFXManager.Instance?.Play(SFXType.HandcuffDepos
+         +it);                                                           
+      78                  yield return new WaitForSeconds(depositInterval
+          );
+      79              }
+      80          }
+
+⏺ Update(Assets/Scripts/Zones/UpgradeZone.cs)
+  ⎿  Added 1 line
+      68  
+      69              if (success)
+      70              {
+      71 +                SFXManager.Instance?.Play(SFXType.UpgradeComple
+         +te);                                                           
+      72                  inventory?.RemoveMoneyVisuals(cost);
+      73                  RefreshUI();
+      74                  if (IsMaxed()) yield break;
+
+⏺ 완료. 요약하면:
+
+  ┌─────────────────────┬────────────────────────────────────────────────────┐
+  │         SFX         │                     발생 위치                      │
+  ├─────────────────────┼────────────────────────────────────────────────────┤
+  │ Mine                │ MineZone(플레이어), WorkerNPC                      │
+  ├─────────────────────┼────────────────────────────────────────────────────┤
+  │ MoneyPickup         │ MoneyStackZone 수령 시                             │
+  ├─────────────────────┼────────────────────────────────────────────────────┤
+  │ HandcuffPickup      │ HandcuffStackZone(플레이어), DeskWorkerNPC 수령 시 │
+  ├─────────────────────┼────────────────────────────────────────────────────┤
+  │ OreDeposit          │ ManufacturingZone DepositLoop(플레이어),           │
+  │                     │ ReceiveOre(WorkerNPC)                              │
+  ├─────────────────────┼────────────────────────────────────────────────────┤
+  │ HandcuffDeposit     │ DeskZone DepositLoop(플레이어), DeskWorkerNPC 납품 │
+  │                     │  시                                                │
+  ├─────────────────────┼────────────────────────────────────────────────────┤
+  │ ManufactureComplete │ ManufacturingZone 제조 완료 후                     │
+  ├─────────────────────┼────────────────────────────────────────────────────┤
+  │ PrisonerSatisfied   │ DeskZone 수갑 소비 완료 직후                       │
+  ├─────────────────────┼────────────────────────────────────────────────────┤
+  │ UpgradeComplete     │ UpgradeZone 업그레이드 성공 시                     │
+  └─────────────────────┴────────────────────────────────────────────────────┘
+
+  에디터 설정: 씬에 빈 GameObject 추가 → SFXManager 컴포넌트 + AudioSource
+  컴포넌트 추가 → AudioSource를 Source 필드에 연결 → 각 Clip 필드에 오디오 클립
+  연결.
+
+✻ Sautéed for 2m 12s
+
+※ recap: Unity 모바일 아이들 게임 PrisonLife 개발 중. 마지막 작업은 SFX 시스템 구현 완료. 다음은 에디터에서 SFXManager 오브젝트 생성 및 오디오 클립 연결.

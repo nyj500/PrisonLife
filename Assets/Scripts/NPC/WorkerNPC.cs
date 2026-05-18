@@ -82,6 +82,7 @@ public class WorkerNPC : MonoBehaviour
                 if (ore.IsMined) { ore.Unreserve(); continue; }
 
                 ore.Mine(); // Mine() 이후 리스폰 시 IsReserved 자동 초기화
+                SoundManager.Instance?.Play(SFXType.Mine);
                 GameObject vis = ItemVisualPool.Instance.GetOre(
                     transform.position + Vector3.up * 0.5f);
                 carryStack.Add(vis);

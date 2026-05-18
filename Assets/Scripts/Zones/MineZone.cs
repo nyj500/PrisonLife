@@ -134,6 +134,7 @@ public class MineZone : BaseZone
                     if (!inventory.CanAddOre) break;
                     if (ore.IsMined) continue;
                     ore.Mine();
+                    SoundManager.Instance?.Play(SFXType.Mine);
                     inventory.AddOre(SpawnInventoryOre(player.transform.position + Vector3.up * 0.8f));
                 }
             }
@@ -143,6 +144,7 @@ public class MineZone : BaseZone
                 OreItem target = GetNearestInRange(harvestRange);
                 if (target == null) continue;
                 target.Mine();
+                SoundManager.Instance?.Play(SFXType.Mine);
                 inventory.AddOre(SpawnInventoryOre(player.transform.position + Vector3.up * 0.8f));
             }
         }

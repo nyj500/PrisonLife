@@ -67,6 +67,7 @@ public class ManufacturingZone : BaseZone
                     + Vector3.up * (pendingOres.Count * itemSpacing + 1.5f);
                 oreVisual.transform.SetPositionAndRotation(spawnPos, Quaternion.identity);
                 pendingOres.Add(oreVisual);
+                SoundManager.Instance?.Play(SFXType.OreDeposit);
             }
 
             yield return new WaitForSeconds(depositInterval);
@@ -91,6 +92,7 @@ public class ManufacturingZone : BaseZone
                 GameObject handcuff = SpawnHandcuffVisual(transform.position);
                 yield return StartCoroutine(AnimateTo(handcuff, handcuffStackZone.StackTopPosition));
                 handcuffStackZone.AddHandcuff(handcuff);
+                SoundManager.Instance?.Play(SFXType.ManufactureComplete);
             }
         }
     }
@@ -119,6 +121,7 @@ public class ManufacturingZone : BaseZone
             + Vector3.up * (pendingOres.Count * itemSpacing + 1.5f);
         oreVisual.transform.SetPositionAndRotation(spawnPos, Quaternion.identity);
         pendingOres.Add(oreVisual);
+        SoundManager.Instance?.Play(SFXType.OreDeposit);
     }
 
     GameObject SpawnHandcuffVisual(Vector3 pos)

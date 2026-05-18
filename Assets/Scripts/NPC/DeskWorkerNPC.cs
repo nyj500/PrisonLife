@@ -58,6 +58,7 @@ public class DeskWorkerNPC : MonoBehaviour
             {
                 if (!handcuffStackZone.TryTakeHandcuff(out GameObject vis)) break;
                 carryStack.Add(vis);
+                SoundManager.Instance?.Play(SFXType.HandcuffPickup);
                 yield return new WaitForSeconds(pickupInterval);
             }
 
@@ -73,6 +74,7 @@ public class DeskWorkerNPC : MonoBehaviour
                 GameObject vis = carryStack[last];
                 carryStack.RemoveAt(last);
                 deskZone.AddHandcuffToDesk(vis);
+                SoundManager.Instance?.Play(SFXType.HandcuffDeposit);
                 yield return new WaitForSeconds(depositInterval);
             }
         }
