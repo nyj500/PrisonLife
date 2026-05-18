@@ -15,6 +15,7 @@ public class MineZone : BaseZone
     [SerializeField] float mineAnimSeconds = 0.5f;
     [SerializeField] float harvestRange = 1.2f;  // 이 범위 안에 광석이 있어야 채굴 가능
 
+
     readonly List<OreItem> ores          = new List<OreItem>();
     readonly List<OreItem> inRangeBuffer = new List<OreItem>();
     Coroutine mineLoop;

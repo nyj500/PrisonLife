@@ -13,7 +13,11 @@ public class PlayerInventory : MonoBehaviour
     [SerializeField] float itemSpacing  = 0.22f;   // 한 열 안에서 아이템 높이 간격
     [SerializeField] float posLerpSpeed = 14f;
 
+    [SerializeField] GameObject oreMaxUI; // 광석 인벤토리 가득 찼을 때 표시 (WorldSpace Billboard)
+
     public int MaxOre { get; set; } = UpgradeManager.ORE_CAP_LVL1;
+
+    void Awake() => oreMaxUI?.SetActive(false);
 
     readonly List<GameObject> oreStack      = new List<GameObject>();
     readonly List<GameObject> handcuffStack = new List<GameObject>();
@@ -67,6 +71,7 @@ public class PlayerInventory : MonoBehaviour
         if (obj == null) return;
         PlaceAboveSlot(obj, oreStack.Count, col1Z);
         oreStack.Add(obj);
+        oreMaxUI?.SetActive(!CanAddOre);
     }
 
     public GameObject RemoveTopOre()
@@ -75,6 +80,7 @@ public class PlayerInventory : MonoBehaviour
         int last = oreStack.Count - 1;
         var obj = oreStack[last];
         oreStack.RemoveAt(last);
+        oreMaxUI?.SetActive(!CanAddOre);
         return obj;
     }
 

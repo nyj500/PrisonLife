@@ -118,7 +118,7 @@ public class UpgradeZone : BaseZone
                 }
                 else
                 {
-                    zoneUI.SetLabel($"Tool Lv{lv} → Lv{lv + 1}");
+                    zoneUI.SetLabel($"Tool \nLv{lv} → Lv{lv + 1}");
                     zoneUI.SetCost($"${UpgradeManager.Instance.ToolUpgradeCost}");
                 }
                 break;
