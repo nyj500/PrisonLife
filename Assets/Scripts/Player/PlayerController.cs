@@ -6,9 +6,9 @@ public class PlayerController : MonoBehaviour
     [SerializeField] float moveSpeed = 5f;
     [SerializeField] VirtualJoystick joystick;
     [SerializeField] Camera gameCamera;
-    [SerializeField] GameObject toolObject;  // 곡괭이(ArmPivot) — MineZone 진입 시에만 활성화
 
-    Rigidbody rb;
+    Rigidbody        rb;
+    PlayerAnimator   playerAnim;
     bool autoMoving;
     Vector3 autoTarget;
     float autoStopDist = 0.5f;
@@ -18,11 +18,11 @@ public class PlayerController : MonoBehaviour
 
     void Awake()
     {
-        rb = GetComponent<Rigidbody>();
+        rb         = GetComponent<Rigidbody>();
+        playerAnim = GetComponentInChildren<PlayerAnimator>();
         rb.freezeRotation = true;
         rb.interpolation = RigidbodyInterpolation.Interpolate;
         if (gameCamera == null) gameCamera = Camera.main;
-        if (toolObject != null) toolObject.SetActive(false); // 기본 비활성
     }
 
     void FixedUpdate()
@@ -104,7 +104,7 @@ public class PlayerController : MonoBehaviour
 
     public void SetToolActive(bool active)
     {
-        if (toolObject != null) toolObject.SetActive(active);
+        playerAnim?.SetToolActive(active);
     }
 
     public void SetJoystick(VirtualJoystick j) => joystick = j;

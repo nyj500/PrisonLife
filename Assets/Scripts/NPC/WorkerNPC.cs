@@ -18,12 +18,17 @@ public class WorkerNPC : MonoBehaviour
     [SerializeField] float carryBaseHeight = 1.5f;
     [SerializeField] float carrySpacing    = 0.2f;
 
+    static readonly int SpeedHash = Animator.StringToHash("Speed");
+    static readonly int MineHash  = Animator.StringToHash("Mine");
+
     NavMeshAgent agent;
+    Animator     anim;
     readonly List<GameObject> carryStack = new List<GameObject>();
 
     void Awake()
     {
         agent = GetComponent<NavMeshAgent>();
+        anim  = GetComponentInChildren<Animator>();
     }
 
     public void Activate()
@@ -35,6 +40,8 @@ public class WorkerNPC : MonoBehaviour
 
     void LateUpdate()
     {
+        anim?.SetFloat(SpeedHash, agent.velocity.sqrMagnitude > 0.01f ? 1f : 0f);
+
         for (int i = 0; i < carryStack.Count; i++)
         {
             if (carryStack[i] == null) continue;
@@ -70,6 +77,7 @@ public class WorkerNPC : MonoBehaviour
                 // 도착 전 리스폰·선점 됐을 경우
                 if (ore.IsMined) { ore.Unreserve(); continue; }
 
+                anim?.SetTrigger(MineHash);
                 yield return new WaitForSeconds(mineInterval);
                 if (ore.IsMined) { ore.Unreserve(); continue; }
 
