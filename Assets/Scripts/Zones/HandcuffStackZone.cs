@@ -35,6 +35,16 @@ public class HandcuffStackZone : BaseZone
         }
     }
 
+    // DeskWorkerNPC가 호출 — 스택 맨 위 수갑 1개 반환
+    public bool TryTakeHandcuff(out GameObject vis)
+    {
+        if (stack.Count == 0) { vis = null; return false; }
+        int last = stack.Count - 1;
+        vis = stack[last];
+        stack.RemoveAt(last);
+        return true;
+    }
+
     protected override void OnPlayerEnter()
     {
         if (collectRoutine != null) StopCoroutine(collectRoutine);

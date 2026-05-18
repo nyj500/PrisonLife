@@ -15,7 +15,8 @@ public class MineZone : BaseZone
     [SerializeField] float mineAnimSeconds = 0.5f;
     [SerializeField] float harvestRange = 1.2f;  // 이 범위 안에 광석이 있어야 채굴 가능
 
-    readonly List<OreItem> ores = new List<OreItem>();
+    readonly List<OreItem> ores          = new List<OreItem>();
+    readonly List<OreItem> inRangeBuffer = new List<OreItem>();
     Coroutine mineLoop;
 
     // ── Grid 생성 ──────────────────────────────────────
@@ -111,36 +112,61 @@ public class MineZone : BaseZone
     {
         while (player != null && inventory != null)
         {
-            // 인벤토리 가득 차면 대기
             if (!inventory.CanAddOre) { yield return new WaitForSeconds(0.25f); continue; }
 
-            // 범위 내에 광석이 없으면 대기 (오토무브 없음)
             OreItem nearest = GetNearestInRange(harvestRange);
             if (nearest == null) { yield return new WaitForSeconds(0.1f); continue; }
 
-            // 채굴 애니메이션
             playerAnim?.TriggerMine();
             yield return new WaitForSeconds(mineAnimSeconds);
 
             if (player == null || inventory == null) break;
 
-            // 애니메이션 종료 시점: 범위 내 가장 가까운 광석 1개 채굴
-            OreItem target = GetNearestInRange(harvestRange);
-            if (target == null) continue;  // 대기 중 광석이 사라졌으면 스킵
+            int toolLevel = UpgradeManager.Instance != null ? UpgradeManager.Instance.ToolLevel : 1;
 
-            target.Mine();
-            inventory.AddOre(SpawnInventoryOre(player.transform.position + Vector3.up * 0.8f));
+            if (toolLevel >= 2)
+            {
+                // Lv2+: 범위 내 모든 광석 채굴
+                GetAllInRange(harvestRange, inRangeBuffer);
+                foreach (var ore in inRangeBuffer)
+                {
+                    if (!inventory.CanAddOre) break;
+                    if (ore.IsMined) continue;
+                    ore.Mine();
+                    inventory.AddOre(SpawnInventoryOre(player.transform.position + Vector3.up * 0.8f));
+                }
+            }
+            else
+            {
+                // Lv1: 가장 가까운 광석 1개
+                OreItem target = GetNearestInRange(harvestRange);
+                if (target == null) continue;
+                target.Mine();
+                inventory.AddOre(SpawnInventoryOre(player.transform.position + Vector3.up * 0.8f));
+            }
         }
     }
 
     // ── 헬퍼 ───────────────────────────────────────────
 
-    // range 안에서 가장 가까운 광석 반환 (없으면 null)
+    // WorkerNPC가 호출 — 지정 위치 기준 가장 가까운 채굴 가능 광석 반환
+    public OreItem GetNearestOre(Vector3 fromPos, float range)
+    {
+        OreItem nearest = null;
+        float minSqr = range * range;
+        foreach (var ore in ores)
+        {
+            if (ore == null || ore.IsMined) continue;
+            float sq = XZSqrDist(fromPos, ore.transform.position);
+            if (sq < minSqr) { minSqr = sq; nearest = ore; }
+        }
+        return nearest;
+    }
+
     OreItem GetNearestInRange(float range)
     {
         OreItem nearest = null;
         float minSqr = range * range;
-
         foreach (var ore in ores)
         {
             if (ore == null || ore.IsMined) continue;
@@ -148,6 +174,18 @@ public class MineZone : BaseZone
             if (sq < minSqr) { minSqr = sq; nearest = ore; }
         }
         return nearest;
+    }
+
+    void GetAllInRange(float range, List<OreItem> result)
+    {
+        result.Clear();
+        float rangeSqr = range * range;
+        foreach (var ore in ores)
+        {
+            if (ore == null || ore.IsMined) continue;
+            if (XZSqrDist(player.transform.position, ore.transform.position) <= rangeSqr)
+                result.Add(ore);
+        }
     }
 
     static float XZSqrDist(Vector3 a, Vector3 b)

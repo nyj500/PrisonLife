@@ -111,6 +111,16 @@ public class ManufacturingZone : BaseZone
         obj.transform.position = destination;
     }
 
+    // WorkerNPC가 호출 — 광석 비주얼을 제조 존 스택에 추가
+    public void ReceiveOre(GameObject oreVisual)
+    {
+        if (oreVisual == null) return;
+        Vector3 spawnPos = transform.position + stackBase
+            + Vector3.up * (pendingOres.Count * itemSpacing + 1.5f);
+        oreVisual.transform.SetPositionAndRotation(spawnPos, Quaternion.identity);
+        pendingOres.Add(oreVisual);
+    }
+
     GameObject SpawnHandcuffVisual(Vector3 pos)
     {
         return ItemVisualPool.Instance.GetHandcuff(pos);

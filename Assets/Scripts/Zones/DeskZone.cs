@@ -21,7 +21,6 @@ public class DeskZone : BaseZone
     [SerializeField] int moneyPerPrisoner  = 1;
 
     readonly List<PrisonerNPC> queue         = new List<PrisonerNPC>();
-    readonly List<PrisonerNPC> pool          = new List<PrisonerNPC>();
     readonly List<GameObject>  deskHandcuffs = new List<GameObject>();
 
     Coroutine depositRoutine;
@@ -58,10 +57,18 @@ public class DeskZone : BaseZone
         }
     }
 
-    Vector3 DeskStackTopPosition =>
+    public Vector3 DeskStackTopPosition =>
         deskStackBase != null
             ? deskStackBase.position + Vector3.up * (deskHandcuffs.Count * deskItemSpacing)
             : transform.position;
+
+    // DeskWorkerNPC가 호출
+    public void AddHandcuffToDesk(GameObject vis)
+    {
+        if (vis == null) return;
+        vis.transform.SetPositionAndRotation(DeskStackTopPosition + Vector3.up * 1.5f, Quaternion.identity);
+        deskHandcuffs.Add(vis);
+    }
 
     // ── 플레이어 진입/퇴장 ────────────────────────────
 
@@ -108,8 +115,10 @@ public class DeskZone : BaseZone
             // 수감자가 데스크에 도착할 때까지 대기
             yield return new WaitUntil(() => !front.IsWalking);
 
-            // 데스크에 수갑이 충분해질 때까지 대기
-            yield return new WaitUntil(() => deskHandcuffs.Count >= front.RequiredHandcuffs);
+            // 감옥 수용 인원이 꽉 찼거나 수갑이 부족하면 대기 (둘 다 충족돼야 처리)
+            yield return new WaitUntil(() =>
+                !(JailManager.Instance != null && JailManager.Instance.IsFull) &&
+                deskHandcuffs.Count >= front.RequiredHandcuffs);
 
             // 수갑 소비
             int needed = front.RequiredHandcuffs;
@@ -135,17 +144,13 @@ public class DeskZone : BaseZone
 
             moneyStackZone?.AddMoney(SpawnMoneyVisual(), moneyPerPrisoner);
 
-            PrisonerNPC leaving = front;
+            // 감옥으로 이송 — jailExit 경유 후 ㄱ자로 입장
             Vector3 exitPos = jailExit != null
                 ? jailExit.position
-                : leaving.transform.position + Vector3.right * 8f;
-            leaving.LeaveToPool(exitPos, () =>
-            {
-                leaving.gameObject.SetActive(false);
-                pool.Add(leaving);
-            });
+                : front.transform.position + Vector3.right * 5f;
+            JailManager.Instance?.AcceptPrisoner(front, exitPos);
 
-            // 앞줄 이동과 동시에 새 수감자가 뒤에서 걸어오도록 즉시 생성
+            // 새 수감자 입장 (뒤에서 걸어오기)
             int lastSlot = queueSlots.Length - 1;
             Vector3 targetPos = queueSlots[lastSlot].position;
             targetPos.y = 1f;
@@ -155,7 +160,7 @@ public class DeskZone : BaseZone
                 : targetPos + Vector3.back * 2f;
             entryPos.y = 1f;
 
-            PrisonerNPC newNpc = GetOrCreatePrisoner();
+            PrisonerNPC newNpc = CreatePrisonerNPC();
             if (newNpc != null)
             {
                 newNpc.Initialize(Random.Range(2, 5), entryPos);
@@ -168,18 +173,7 @@ public class DeskZone : BaseZone
         }
     }
 
-    // ── 풀 관리 ──────────────────────────────────────
-
-    PrisonerNPC GetOrCreatePrisoner()
-    {
-        if (pool.Count > 0)
-        {
-            var npc = pool[pool.Count - 1];
-            pool.RemoveAt(pool.Count - 1);
-            return npc;
-        }
-        return CreatePrisonerNPC();
-    }
+    // ── NPC 생성 ──────────────────────────────────────
 
     PrisonerNPC CreatePrisonerNPC()
     {

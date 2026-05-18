@@ -13,9 +13,9 @@ GameObject:
   - component: {fileID: 6143829321709017825}
   - component: {fileID: 782493594135212874}
   - component: {fileID: 7124457319356410311}
-  - component: {fileID: -4000721157762091239}
+  - component: {fileID: 5159252373930858708}
   m_Layer: 0
-  m_Name: Prisoner
+  m_Name: DeskWorkerNPC
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -65,7 +65,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 10303, guid: 0000000000000000f000000000000000, type: 0}
+  - {fileID: 2100000, guid: 66ea8cda8e9e644eb97d8a681c688189, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -137,7 +137,7 @@ Rigidbody:
   m_Interpolate: 0
   m_Constraints: 112
   m_CollisionDetection: 0
---- !u!114 &-4000721157762091239
+--- !u!114 &5159252373930858708
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -146,10 +146,19 @@ MonoBehaviour:
   m_GameObject: {fileID: 703018931104467369}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 8b093cc0ed74e4bf6976592d8cf1ccd7, type: 3}
+  m_Script: {fileID: 11500000, guid: d5036292be38d4771876fdef43357b8b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  walkSpeed: 2
+  handcuffStackZone: {fileID: 0}
+  deskZone: {fileID: 0}
+  pickupWaypoint: {fileID: 0}
+  deskWaypoint: {fileID: 0}
+  carryCapacity: 5
+  walkSpeed: 3
+  pickupInterval: 0.2
+  depositInterval: 0.2
+  carryBaseHeight: 1.5
+  carrySpacing: 0.2
 --- !u!1 &5306099930505771750
 GameObject:
   m_ObjectHideFlags: 0
@@ -211,7 +220,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 0dde076e859974386ad635a92744e751, type: 2}
+  - {fileID: 2100000, guid: 3227a926ca11e4c2a90847001e891990, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0

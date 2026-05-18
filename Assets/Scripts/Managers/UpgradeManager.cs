@@ -19,9 +19,16 @@ public class UpgradeManager : MonoBehaviour
     [SerializeField] float[] toolMineRange    = { 1.2f, 1.8f, 2.5f };
     [SerializeField] float[] toolMineSpeed    = { 0.5f, 0.35f, 0.2f };
 
-    [Header("NPC Hire")]
-    [SerializeField] int workerHireCost     = 50;
-    [SerializeField] int deskWorkerHireCost = 50;
+    [Header("Worker NPC (씬에 비활성화로 배치된 3개)")]
+    [SerializeField] int         workerHireCost = 50;
+    [SerializeField] WorkerNPC[] workerNPCs;
+
+    [Header("Desk Worker NPC")]
+    [SerializeField] int           deskWorkerHireCost = 50;
+    [SerializeField] DeskWorkerNPC deskWorkerNPC;
+
+    [Header("Jail Capacity Upgrade")]
+    [SerializeField] int jailUpgradeCost = 50;
 
     static readonly int[] oreCaps = { ORE_CAP_LVL1, ORE_CAP_LVL2, ORE_CAP_LVL3 };
 
@@ -33,6 +40,7 @@ public class UpgradeManager : MonoBehaviour
     public int   ToolUpgradeCost    => ToolLevel < TOOL_MAX_LEVEL ? toolUpgradeCosts[ToolLevel - 1] : 0;
     public int   WorkerHireCost     => workerHireCost;
     public int   DeskWorkerHireCost => deskWorkerHireCost;
+    public int   JailUpgradeCost    => jailUpgradeCost;
 
     void Awake()
     {
@@ -55,6 +63,7 @@ public class UpgradeManager : MonoBehaviour
         if (HasWorker) return false;
         if (!GameManager.Instance.TrySpendMoney(workerHireCost)) return false;
         HasWorker = true;
+        SpawnWorkers();
         return true;
     }
 
@@ -63,6 +72,21 @@ public class UpgradeManager : MonoBehaviour
         if (HasDeskWorker) return false;
         if (!GameManager.Instance.TrySpendMoney(deskWorkerHireCost)) return false;
         HasDeskWorker = true;
+        deskWorkerNPC?.Activate();
         return true;
+    }
+
+    public bool TryUpgradeJail()
+    {
+        if (!GameManager.Instance.TrySpendMoney(jailUpgradeCost)) return false;
+        JailManager.Instance?.UpgradeCapacity();
+        return true;
+    }
+
+    void SpawnWorkers()
+    {
+        if (workerNPCs == null) return;
+        foreach (var npc in workerNPCs)
+            npc?.Activate();
     }
 }

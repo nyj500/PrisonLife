@@ -1,0 +1,770 @@
+╭─── Claude Code v2.1.141 ─────────────────────────────────────────────────────╮
+│                                                    │ Tips for getting        │
+│                 Welcome back 예진!                 │ started                 │
+│                                                    │ Run /init to create a … │
+│                      ▗ ▗   ▖ ▖                     │ ─────────────────────── │
+│                                                    │ What's new              │
+│                        ▘▘ ▝▝                       │ Added `terminalSequenc… │
+│  Sonnet 4.6 · Claude Pro · nayejin500@gmail.com's  │ Added `CLAUDE_CODE_PLU… │
+│  Organization                                      │ Added `ANTHROPIC_WORKS… │
+│                 ~/Unity/PrisonLife                 │ /release-notes for more │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+✻ Conversation compacted (ctrl+o for history)
+
+
+❯ /compact                                                                      
+  ⎿  Compacted (ctrl+o to see full summary)
+  ⎿  Read Assets/Scripts/Managers/UpgradeManager.cs (93 lines)
+  ⎿  Read Assets/Scripts/NPC/WorkerNPC.cs (109 lines)
+  ⎿  Read Assets/Scripts/NPC/DeskWorkerNPC.cs (100 lines)
+  ⎿  Read Assets/Scripts/Zones/UpgradeZone.cs (126 lines)
+  ⎿  Read Assets/Scripts/Zones/DeskZone.cs (211 lines)
+
+❯ UpgradeManager에 지금 프리팹을 할당하는 방식인데, 씬에 배치된 NPC를 할당하는  
+  방식으로 바꿔줘. WorkerNPC는 업그레이드 시 3명이 동시에 SetActive 돼.위치는   
+  x축으로 일렬. 지금 NPC 프리팹에 씬의 오브젝트를 미리 할당할 수 없어서 문제야. 
+
+⏺ SpawnWorkers()만 수정하면 됩니다.
+
+⏺ Update(Assets/Scripts/Managers/UpgradeManager.cs)
+  ⎿  Added 3 lines, removed 14 lines
+      72          return true;
+      73      }
+      74  
+      75 -    // 3명을 workerSpawnRoot 기준으로 일렬 생성                
+      75      void SpawnWorkers()
+      76      {
+      78 -        if (workerNpcPrefab == null || workerSpawnRoot == null)
+         - return;                                                       
+      79 -                                                               
+      80 -        const int count = 3;                                   
+      81 -        for (int i = 0; i < count; i++)                        
+      82 -        {                                                      
+      83 -            // i=0 → -1칸, i=1 → 0(중앙), i=2 → +1칸           
+      84 -            float offset = (i - (count - 1) * 0.5f) * workerLin
+         -eSpacing;                                                      
+      85 -            Vector3 pos  = workerSpawnRoot.position + workerSpa
+         -wnRoot.right * offset;                                         
+      86 -                                                               
+      87 -            WorkerNPC npc = Instantiate(workerNpcPrefab, pos, w
+         -orkerSpawnRoot.rotation);                                      
+      88 -            npc.Initialize(mineZoneRef, manufacturingZoneRef, f
+         -actoryWaypointRef);                                            
+      89 -            npc.Activate();                                    
+      90 -        }                                                      
+      77 +        if (workerNPCs == null) return;                        
+      78 +        foreach (var npc in workerNPCs)                        
+      79 +            npc?.Activate();                                   
+      80      }
+      81  }
+
+⏺ 완료. 이제 에디터에서 해야 할 것:
+
+  1. 씬에 WorkerNPC 오브젝트 3개 배치 (비활성 상태로)
+  2. 각 NPC Inspector에서 MineZone, ManufacturingZone, FactoryWaypoint 직접 할당
+  3. UpgradeManager Inspector → Worker NPCs 배열 크기 3으로 설정 후 3개 NPC 연결
+
+  Worker 고용 시 foreach로 3개 동시 Activate() 호출됩니다.
+
+✻ Churned for 23s
+
+※ recap: Prison Life idle game 구현 중. UpgradeManager의 SpawnWorkers를 씬 오브젝트 배열 방식으로 교체 완료. 다음: 에디터에서 WorkerNPC 3개를 씬에 비활성 배치하고 Inspector에서 레퍼런스 연결.
+
+❯ workerNPC 초기 위치 설정은 어떻게 해?                                         
+
+⏺ 씬 오브젝트 방식이므로 Unity 에디터에서 직접 배치하면 됩니다.
+
+  1. Hierarchy에서 빈 WorkerNPC 게임오브젝트 3개 생성 (또는 프리팹 드래그)
+  2. 각각 Transform에서 X좌표만 조정해서 일렬로 배치 (예: X = -1, 0, 1)
+  3. Inspector에서 WorkerNPC 컴포넌트의 레퍼런스 할당
+  4. 게임오브젝트 비활성화 (체크박스 해제) — 고용 시 Activate()가 켜줌
+
+  게임 시작 전 에디터에서 위치를 잡아두면 되기 때문에 별도 스크립트 없이
+  Transform 값으로 조절하면 됩니다.
+
+✻ Crunched for 9s
+
+❯ tool 업그레이드 했을 때, 1레벨과 달리 2레벨과 3레벨은 범위안의 ore가 모두     
+  채굴되도록 해줘. 1레벨은 한번에 1개, 그 이후는 한번에 1개~여러 개가 되는      
+  거야. 그리고 지금 업그레이드 진입 시 바로 되게 되어있는데, 1초 동안           
+  업그레이드 존에 있어야지 업그레이드 되게 해줘. 또한 그 게이지는 존의 바닥에   
+  HUD로 표시할 거야.                                                            
+
+⏺ 관련 파일들을 먼저 읽겠습니다.
+
+  Searched for 1 pattern, read 3 files (ctrl+o to expand)
+
+⏺ 구조 파악 완료. 세 파일을 수정합니다.
+
+  - MineZone: 레벨별 채굴 방식 분기
+  - ZoneUI: 게이지 Image 지원 추가
+  - UpgradeZone: 1초 홀드 + 게이지 연동
+
+⏺ Update(Assets/Scripts/Zones/MineZone.cs)
+  ⎿  Added 2 lines, removed 1 line
+      15      [SerializeField] float mineAnimSeconds = 0.5f;
+      16      [SerializeField] float harvestRange = 1.2f;  // 이 범위 안
+          에 광석이 있어야 채굴 가능
+      17  
+      18 -    readonly List<OreItem> ores = new List<OreItem>();         
+      18 +    readonly List<OreItem> ores          = new List<OreItem>();
+      19 +    readonly List<OreItem> inRangeBuffer = new List<OreItem>();
+      20      Coroutine mineLoop;
+      21  
+      22      // ── Grid 생성 ──────────────────────────────────────
+
+⏺ Update(Assets/Scripts/Zones/MineZone.cs)
+  ⎿  Added 21 lines, removed 8 lines
+      112      {
+      113          while (player != null && inventory != null)
+      114          {
+      115 -            // 인벤토리 가득 차면 대기                        
+      115              if (!inventory.CanAddOre) { yield return new WaitF
+           orSeconds(0.25f); continue; }
+      116  
+      118 -            // 범위 내에 광석이 없으면 대기 (오토무브 없음)   
+      117              OreItem nearest = GetNearestInRange(harvestRange);
+      118              if (nearest == null) { yield return new WaitForSec
+           onds(0.1f); continue; }
+      119  
+      122 -            // 채굴 애니메이션                                
+      120              playerAnim?.TriggerMine();
+      121              yield return new WaitForSeconds(mineAnimSeconds);
+      122  
+      123              if (player == null || inventory == null) break;
+      124  
+      128 -            // 애니메이션 종료 시점: 범위 내 가장 가까운 광석 
+          -1개 채굴                                                      
+      129 -            OreItem target = GetNearestInRange(harvestRange); 
+      130 -            if (target == null) continue;  // 대기 중 광석이  
+          -사라졌으면 스킵                                               
+      125 +            int toolLevel = UpgradeManager.Instance != null ? 
+          +UpgradeManager.Instance.ToolLevel : 1;                        
+      126  
+      132 -            target.Mine();                                    
+      133 -            inventory.AddOre(SpawnInventoryOre(player.transfor
+          -m.position + Vector3.up * 0.8f));                             
+      127 +            if (toolLevel >= 2)                               
+      128 +            {                                                 
+      129 +                // Lv2+: 범위 내 모든 광석 채굴               
+      130 +                GetAllInRange(harvestRange, inRangeBuffer);   
+      131 +                foreach (var ore in inRangeBuffer)            
+      132 +                {                                             
+      133 +                    if (!inventory.CanAddOre) break;          
+      134 +                    if (ore.IsMined) continue;                
+      135 +                    ore.Mine();                               
+      136 +                    inventory.AddOre(SpawnInventoryOre(player.
+          +transform.position + Vector3.up * 0.8f));                     
+      137 +                }                                             
+      138 +            }                                                 
+      139 +            else                                              
+      140 +            {                                                 
+      141 +                // Lv1: 가장 가까운 광석 1개                  
+      142 +                OreItem target = GetNearestInRange(harvestRang
+          +e);                                                           
+      143 +                if (target == null) continue;                 
+      144 +                target.Mine();                                
+      145 +                inventory.AddOre(SpawnInventoryOre(player.tran
+          +sform.position + Vector3.up * 0.8f));                         
+      146 +            }                                                 
+      147          }
+      148      }
+      149  
+
+⏺ Update(Assets/Scripts/Zones/MineZone.cs)
+  ⎿  Added 12 lines, removed 2 lines
+      163          return nearest;
+      164      }
+      165  
+      166 -    // range 안에서 가장 가까운 광석 반환 (없으면 null)       
+      166      OreItem GetNearestInRange(float range)
+      167      {
+      168          OreItem nearest = null;
+      169          float minSqr = range * range;
+      171 -                                                              
+      170          foreach (var ore in ores)
+      171          {
+      172              if (ore == null || ore.IsMined) continue;
+     ...
+      176          return nearest;
+      177      }
+      178  
+      179 +    void GetAllInRange(float range, List<OreItem> result)     
+      180 +    {                                                         
+      181 +        result.Clear();                                       
+      182 +        float rangeSqr = range * range;                       
+      183 +        foreach (var ore in ores)                             
+      184 +        {                                                     
+      185 +            if (ore == null || ore.IsMined) continue;         
+      186 +            if (XZSqrDist(player.transform.position, ore.trans
+          +form.position) <= rangeSqr)                                   
+      187 +                result.Add(ore);                              
+      188 +        }                                                     
+      189 +    }                                                         
+      190 +                                                              
+      191      static float XZSqrDist(Vector3 a, Vector3 b)
+      192      {
+      193          float dx = a.x - b.x;
+
+⏺ 이제 ZoneUI에 게이지 지원 추가:
+
+⏺ Update(Assets/Scripts/UI/ZoneUI.cs)
+  ⎿  Added 9 lines
+       1  using UnityEngine;
+       2 +using UnityEngine.UI;                                          
+       3  using TMPro;
+       4  
+       5  public class ZoneUI : MonoBehaviour
+       6  {
+       7      [SerializeField] TextMeshProUGUI labelText;
+       8      [SerializeField] TextMeshProUGUI costText;
+       9 +    [SerializeField] Image gaugeImage;                         
+      10  
+      11      public void SetLabel(string text)
+      12      {
+     ...
+      17      {
+      18          if (costText != null) costText.text = text;
+      19      }
+      20 +                                                               
+      21 +    public void SetGauge(float t)                              
+      22 +    {                                                          
+      23 +        if (gaugeImage == null) return;                        
+      24 +        gaugeImage.fillAmount = Mathf.Clamp01(t);              
+      25 +        gaugeImage.gameObject.SetActive(t > 0f);               
+      26 +    }                                                          
+      27  }
+
+⏺ 마지막으로 UpgradeZone을 1초 홀드 방식으로 변경:
+
+⏺ Update(Assets/Scripts/Zones/UpgradeZone.cs)
+  ⎿  Added 18 lines, removed 2 lines
+      22      protected override void OnPlayerExit()
+      23      {
+      24          if (upgradeRoutine != null) { StopCoroutine(upgradeRout
+          ine); upgradeRoutine = null; }
+      25 +        zoneUI?.SetGauge(0f);                                  
+      26      }
+      27  
+      28      IEnumerator TryUpgradeLoop()
+      29      {
+      30 +        const float holdTime = 1f;                             
+      31 +                                                               
+      32          while (player != null)
+      33          {
+      34              if (UpgradeManager.Instance == null) { yield return
+           new WaitForSeconds(0.5f); continue; }
+      35  
+      33 -            // 진입 즉시 시도, 실패(돈 부족)하면 0.5초 후 재시 
+         -도                                                             
+      36 +            // 1초 동안 게이지 채우기                          
+      37 +            float elapsed = 0f;                                
+      38 +            while (elapsed < holdTime && player != null)       
+      39 +            {                                                  
+      40 +                elapsed += Time.deltaTime;                     
+      41 +                zoneUI?.SetGauge(elapsed / holdTime);          
+      42 +                yield return null;                             
+      43 +            }                                                  
+      44 +                                                               
+      45 +            if (player == null) break;                         
+      46 +                                                               
+      47 +            zoneUI?.SetGauge(0f);                              
+      48 +                                                               
+      49              int cost = GetCurrentCost();
+      50              bool success = upgradeType switch
+      51              {
+     ...
+      62                  if (IsMaxed()) yield break;
+      63              }
+      64  
+      50 -            yield return new WaitForSeconds(0.5f);             
+      65 +            // 성공/실패 모두 0.3초 후 재시도                  
+      66 +            yield return new WaitForSeconds(0.3f);             
+      67          }
+      68      }
+      69  
+
+⏺ 완료. 에디터에서 해야 할 것:
+
+  게이지 UI 세팅:
+  1. 각 업그레이드 존의 ZoneUI 하위에 UI Image 오브젝트 생성
+  2. Image Type → Filled, Fill Method → Horizontal (또는 Radial)
+  3. 오브젝트 비활성화 (초기 숨김 상태)
+  4. ZoneUI 컴포넌트의 Gauge Image 필드에 연결
+
+  동작 정리:
+  - 업그레이드 존 진입 → 1초 게이지 채움 → 업그레이드 시도
+  - 돈 부족이면 0.3초 후 다시 1초 채움 반복
+  - 존 이탈 시 게이지 즉시 초기화
+  - Lv2+ 채굴: 범위 내 모든 광석 한 번의 애니메이션으로 동시 채굴
+
+✻ Crunched for 1m 43s
+※ recap: Prison Life Unity idle game. Just implemented tool level multi-ore mining and upgrade zone 1-second hold gauge. Next: set up the gauge UI Image in the editor.
+
+❯ 업그레이드존 UI를 WorldSpace로 존 크기에 맞춰 바닥에 배치해놨어. 근데         
+  플레이어가 그 위를 지나갈 때마다 UI가 깜빡거려.                               
+
+⏺ 플레이어 메시가 Canvas 쿼드와 3D 깊이 버퍼에서 충돌해서 깜빡이는 문제입니다.
+  Sorting Layer로 해결합니다.
+
+  에디터에서 할 것:
+
+  1. Project Settings → Tags and Layers → Sorting Layers
+  새 레이어 WorldUI 추가 (Default 아래에)
+  2. 업그레이드 존 Canvas 컴포넌트
+  Sorting Layer → WorldUI
+  Order in Layer → 0
+  3. 플레이어 Renderer는 그대로 Default 레이어 유지
+
+  WorldUI가 Default보다 나중에 렌더링되므로, 플레이어가 위를 지나도 Canvas가
+  항상 위에 그려져 깜빡임이 사라집니다.
+
+  ---
+  만약 그래도 바닥과의 Z-파이팅이 있다면 Canvas Y 위치를 +0.01 정도 올리면
+  됩니다.
+
+✻ Baked for 58s
+
+❯ sorting 레이어 추가해서 바꿨고, 이미 y는 +1인데 똑같아.                       
+
+⏺ Sorting Layer는 Canvas끼리의 순서만 보장하고, 3D 메시와의 깊이 테스트는 여전히
+   일어납니다. ZTest를 끄는 스크립트가 필요합니다.
+
+  Listed 1 directory (ctrl+o to expand)
+
+⏺ Write(Assets/Scripts/UI/WorldSpaceUIOverlay.cs)
+  ⎿  Wrote 16 lines to Assets/Scripts/UI/WorldSpaceUIOverlay.cs
+       2 using UnityEngine.UI;
+       3 using UnityEngine.Rendering;
+       4 
+       5 [RequireComponent(typeof(Canvas))]
+       6 public class WorldSpaceUIOverlay : MonoBehaviour
+       7 {
+       8     void Start()
+       9     {
+      10         foreach (var g in GetComponentsInChildren<Graphic>(true)
+         )
+     … +7 lines (ctrl+o to expand)
+
+⏺ 업그레이드 존 Canvas 게임오브젝트에 WorldSpaceUIOverlay 컴포넌트를 추가하면
+  됩니다.
+
+  unity_GUIZTestMode를 Always로 설정하면 UI가 3D 깊이 버퍼 검사를 완전히
+  무시하고 항상 위에 렌더링됩니다. Sorting Layer는 그대로 둬도 됩니다.
+
+✻ Crunched for 38s
+
+❯ 깜빡임은 여전하고, 오히려 바닥에 있는 오브젝트가 플레이어를 통과해서 위로     
+  보여서 더 어색해졌어                                                          
+
+⏺ WorldSpace Canvas는 3D 메시와 깊이 버퍼를 공유하기 때문에 근본적으로 이 방식은
+   한계가 있습니다. HUDManager의 스크린스페이스 캔버스에 게이지를 붙이는 게 맞는
+   구조입니다.
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ HUDManager에 게이지를 붙이고, UpgradeZone이 그걸 사용하도록 바꾸겠습니다.
+  WorldSpaceUIOverlay는 삭제합니다.
+
+⏺ Update(Assets/Scripts/UI/HUDManager.cs)
+  ⎿  Added 5 lines
+      1  using UnityEngine;
+      2 +using UnityEngine.UI;                                           
+      3  using TMPro;
+      4  
+      5  public class HUDManager : MonoBehaviour
+     ...
+       8  
+       9      [SerializeField] TextMeshProUGUI moneyText;
+      10  
+      11 +    [Header("Upgrade Gauge")]                                  
+      12 +    [SerializeField] GameObject upgradeGaugeRoot;              
+      13 +    [SerializeField] Image      upgradeGaugeFill;              
+      14 +                                                               
+      15      void Awake()
+      16      {
+      17          if (Instance != null && Instance != this) { Destroy(gam
+          eObject); return; }
+
+⏺ Update(Assets/Scripts/UI/HUDManager.cs)
+  ⎿  Added 12 lines
+      37          if (moneyText != null)
+      38              moneyText.text = $"${amount}";
+      39      }
+      40 +                                                               
+      41 +    public void ShowUpgradeGauge(float t)                      
+      42 +    {                                                          
+      43 +        if (upgradeGaugeRoot != null) upgradeGaugeRoot.SetActiv
+         +e(true);                                                       
+      44 +        if (upgradeGaugeFill != null) upgradeGaugeFill.fillAmou
+         +nt = Mathf.Clamp01(t);                                         
+      45 +    }                                                          
+      46 +                                                               
+      47 +    public void HideUpgradeGauge()                             
+      48 +    {                                                          
+      49 +        if (upgradeGaugeRoot != null) upgradeGaugeRoot.SetActiv
+         +e(false);                                                      
+      50 +        if (upgradeGaugeFill != null) upgradeGaugeFill.fillAmou
+         +nt = 0f;                                                       
+      51 +    }                                                          
+      52  }
+
+⏺ 이제 UpgradeZone의 게이지 호출을 HUDManager로 교체합니다.
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(Assets/Scripts/Zones/UpgradeZone.cs)
+  ⎿  Added 3 lines, removed 5 lines
+      22      protected override void OnPlayerExit()
+      23      {
+      24          if (upgradeRoutine != null) { StopCoroutine(upgradeRout
+          ine); upgradeRoutine = null; }
+      25 -        zoneUI?.SetGauge(0f);                                  
+      25 +        HUDManager.Instance?.HideUpgradeGauge();               
+      26      }
+      27  
+      28      IEnumerator TryUpgradeLoop()
+     ...
+      33          {
+      34              if (UpgradeManager.Instance == null) { yield return
+           new WaitForSeconds(0.5f); continue; }
+      35  
+      36 -            // 1초 동안 게이지 채우기                          
+      36              float elapsed = 0f;
+      37              while (elapsed < holdTime && player != null)
+      38              {
+      39                  elapsed += Time.deltaTime;
+      41 -                zoneUI?.SetGauge(elapsed / holdTime);          
+      40 +                HUDManager.Instance?.ShowUpgradeGauge(elapsed /
+         + holdTime);                                                    
+      41                  yield return null;
+      42              }
+      43  
+      44              if (player == null) break;
+      45  
+      47 -            zoneUI?.SetGauge(0f);                              
+      46 +            HUDManager.Instance?.HideUpgradeGauge();           
+      47  
+      48              int cost = GetCurrentCost();
+      49              bool success = upgradeType switch
+     ...
+      61                  if (IsMaxed()) yield break;
+      62              }
+      63  
+      65 -            // 성공/실패 모두 0.3초 후 재시도                  
+      64              yield return new WaitForSeconds(0.3f);
+      65          }
+      66      }
+
+⏺ ZoneUI에서 게이지 관련 코드 제거하고, WorldSpaceUIOverlay도 삭제합니다.
+
+⏺ Update(Assets/Scripts/UI/ZoneUI.cs)
+  ⎿  Removed 9 lines
+       1  using UnityEngine;
+       2 -using UnityEngine.UI;                                          
+       2  using TMPro;
+       3  
+       4  public class ZoneUI : MonoBehaviour
+       5  {
+       6      [SerializeField] TextMeshProUGUI labelText;
+       7      [SerializeField] TextMeshProUGUI costText;
+       9 -    [SerializeField] Image gaugeImage;                         
+       8  
+       9      public void SetLabel(string text)
+      10      {
+     ...
+      15      {
+      16          if (costText != null) costText.text = text;
+      17      }
+      20 -                                                               
+      21 -    public void SetGauge(float t)                              
+      22 -    {                                                          
+      23 -        if (gaugeImage == null) return;                        
+      24 -        gaugeImage.fillAmount = Mathf.Clamp01(t);              
+      25 -        gaugeImage.gameObject.SetActive(t > 0f);               
+      26 -    }                                                          
+      18  }
+
+⏺ Bash(rm
+      /Users/nyj500/Unity/PrisonLife/Assets/Scripts/UI/WorldSpaceUIOverlay.cs /U
+      sers/nyj500/Unity/PrisonLife/Assets/Scripts/UI/WorldSpaceUIOverlay.cs.meta
+       2>/dev/n…)
+  ⎿  done
+
+⏺ 완료. 에디터에서 할 것:
+
+  1. 기존 WorldSpace Canvas의 게이지 Image 오브젝트는 삭제해도 됩니다
+  2. 메인 HUD Canvas(Screen Space - Overlay) 하위에 게이지 UI 추가:
+    - 빈 오브젝트 UpgradeGaugeRoot → 비활성화로 시작
+    - 하위에 배경 Image + Fill Image (Image Type: Filled, Fill Method:
+  Horizontal)
+  3. HUDManager Inspector에 Upgrade Gauge Root, Upgrade Gauge Fill 연결
+
+  이제 게이지가 스크린스페이스에서 그려지므로 깜빡임이 없습니다.
+
+✻ Sautéed for 1m 40s
+
+❯ 아니 WorldSpaceUIOverlay를 만들기 전 상태로 돌려줘                            
+
+⏺ WorldSpaceUIOverlay 만들기 직전 상태 = ZoneUI에 게이지 있고, UpgradeZone이
+  zoneUI 쓰는 상태로 되돌리겠습니다.
+
+⏺ Update(Assets/Scripts/UI/ZoneUI.cs)
+  ⎿  Added 9 lines
+       1  using UnityEngine;
+       2 +using UnityEngine.UI;                                          
+       3  using TMPro;
+       4  
+       5  public class ZoneUI : MonoBehaviour
+       6  {
+       7      [SerializeField] TextMeshProUGUI labelText;
+       8      [SerializeField] TextMeshProUGUI costText;
+       9 +    [SerializeField] Image gaugeImage;                         
+      10  
+      11      public void SetLabel(string text)
+      12      {
+     ...
+      17      {
+      18          if (costText != null) costText.text = text;
+      19      }
+      20 +                                                               
+      21 +    public void SetGauge(float t)                              
+      22 +    {                                                          
+      23 +        if (gaugeImage == null) return;                        
+      24 +        gaugeImage.fillAmount = Mathf.Clamp01(t);              
+      25 +        gaugeImage.gameObject.SetActive(t > 0f);               
+      26 +    }                                                          
+      27  }
+
+⏺ Update(Assets/Scripts/Zones/UpgradeZone.cs)  ⎿  Added 3 lines, removed 3 lines
+      22      protected override void OnPlayerExit()
+      23      {
+      24          if (upgradeRoutine != null) { StopCoroutine(upgradeRout
+          ine); upgradeRoutine = null; }
+      25 -        HUDManager.Instance?.HideUpgradeGauge();               
+      25 +        zoneUI?.SetGauge(0f);                                  
+      26      }
+      27  
+      28      IEnumerator TryUpgradeLoop()
+     ...
+      37              while (elapsed < holdTime && player != null)
+      38              {
+      39                  elapsed += Time.deltaTime;
+      40 -                HUDManager.Instance?.ShowUpgradeGauge(elapsed /
+         - holdTime);                                                    
+      40 +                zoneUI?.SetGauge(elapsed / holdTime);          
+      41                  yield return null;
+      42              }
+      43  
+      44              if (player == null) break;
+      45  
+      46 -            HUDManager.Instance?.HideUpgradeGauge();           
+      46 +            zoneUI?.SetGauge(0f);                              
+      47  
+      48              int cost = GetCurrentCost();
+      49              bool success = upgradeType switch
+
+⏺ Update(Assets/Scripts/UI/HUDManager.cs)
+  ⎿  Removed 5 lines
+      1  using UnityEngine;
+      2 -using UnityEngine.UI;                                           
+      2  using TMPro;
+      3  
+      4  public class HUDManager : MonoBehaviour
+     ...
+       7  
+       8      [SerializeField] TextMeshProUGUI moneyText;
+       9  
+      11 -    [Header("Upgrade Gauge")]                                  
+      12 -    [SerializeField] GameObject upgradeGaugeRoot;              
+      13 -    [SerializeField] Image      upgradeGaugeFill;              
+      14 -                                                               
+      10      void Awake()
+      11      {
+      12          if (Instance != null && Instance != this) { Destroy(gam
+          eObject); return; }
+
+⏺ Update(Assets/Scripts/UI/HUDManager.cs)
+  ⎿  Removed 12 lines
+      32          if (moneyText != null)
+      33              moneyText.text = $"${amount}";
+      34      }
+      35 -                                                               
+      36 -    public void ShowUpgradeGauge(float t)                      
+      37 -    {                                                          
+      38 -        if (upgradeGaugeRoot != null) upgradeGaugeRoot.SetActiv
+         -e(true);                                                       
+      39 -        if (upgradeGaugeFill != null) upgradeGaugeFill.fillAmou
+         -nt = Mathf.Clamp01(t);                                         
+      40 -    }                                                          
+      41 -                                                               
+      42 -    public void HideUpgradeGauge()                             
+      43 -    {                                                          
+      44 -        if (upgradeGaugeRoot != null) upgradeGaugeRoot.SetActiv
+         -e(false);                                                      
+      45 -        if (upgradeGaugeFill != null) upgradeGaugeFill.fillAmou
+         -nt = 0f;                                                       
+      46 -    }                                                          
+      35  }
+
+⏺ 완료. WorldSpaceUIOverlay 추가 전 상태로 돌아왔습니다.
+
+✻ Baked for 32s
+
+※ recap: Building a Unity mobile idle game (Prison Life). Current blocker: WorldSpace upgrade zone gauge flickers when the player walks over it. Next step: decide on a different approach to display the gauge.
+
+❯ 같은 월드스페이스 캔버스를 업그레이드 존 산하에 두면 깜빡거리고, 일반 존      
+  산하에 두면 안 깜빡거리는 이유가 뭘까? 속성은 다 같은데..                     
+
+⏺ 가장 유력한 원인은 플레이어 동선 차이입니다.
+
+  - 업그레이드 존: 플레이어가 존 안으로 걸어 들어가서 Canvas 위를 밟고 지나감 →
+  플레이어 메시가 Canvas 쿼드와 같은 깊이에서 겹침 → 프레임마다 깊이 버퍼 승자가
+   바뀜 → 깜빡임
+  - 일반 존 (HandcuffZone 등): 플레이어가 존 경계 앞에 서서 상호작용 → Canvas
+  위를 직접 밟지 않음 → 메시 겹침 없음 → 깜빡임 없음
+
+  Canvas 속성이 동일해도, 플레이어 메시가 Canvas 위를 지나가는지 여부가 결정적
+  차이입니다.
+
+  ---
+  근본 해결은 두 가지 중 하나입니다.
+
+  A. Canvas를 플레이어가 밟지 않는 위치로 이동
+  존 경계 바깥쪽에 수직으로 세우거나, 플레이어 키보다 높이 올리기
+
+  B. 업그레이드 존을 일반 존처럼 설계
+  플레이어가 존 경계 앞에 서서 상호작용하게 하고, Canvas는 존 앞에 배치
+  (지금처럼 존 안에 들어가서 밟는 구조 대신)
+
+  어떤 방향으로 가고 싶으신가요?
+
+✻ Cooked for 1m 5s
+
+❯ 지금 게이지가 어떤 방식으로 보이는 거야?                                      
+
+⏺ 현재 구조:
+
+  - UpgradeZone 하위에 WorldSpace Canvas 배치
+  - Canvas 안에 ZoneUI 컴포넌트가 붙은 오브젝트
+  - ZoneUI.gaugeImage에 연결된 UI Image (Fill 방식)
+  - UpgradeZone 코루틴이 매 프레임 zoneUI.SetGauge(elapsed / 1f) 호출 →
+  image.fillAmount 업데이트
+
+  즉, 3D 월드에 배치된 Canvas 위의 Image가 게이지 역할을 하고 있고, 그게 바닥에
+  깔려있으니 플레이어가 밟으면 깜빡이는 구조입니다.
+
+  어떻게 바꾸고 싶으신 건가요? 예를 들어:
+  - 존 앞에 수직으로 세운 표지판 형태
+  - 화면 하단 고정 HUD
+  - 존 위에 띄운 원형 게이지 (빌보드)
+
+✻ Cogitated for 10s
+
+※ recap: Prison Life Unity idle game, deadline tomorrow. Currently fixing upgrade zone gauge flickering — waiting for user's decision on where to display the gauge (vertical sign, screen HUD, or billboard above zone).
+
+❯ 업그레이드 존에 들어갔을 때, 돈이 부족하면 반응 x, 돈이 충분하면 게이지가 1초 
+   동안(업그레이드 시간) 0->1로 Fill되도록. 1이 되면(다 채워지면)  업그레이드   
+  완료라는 뜻인거지.                                                            
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ GameManager.Money가 공개되어 있으니 별도 메서드 없이 처리 가능합니다.
+  UpgradeZone 루프만 수정합니다.
+  ⎿  Interrupted · What should Claude do instead?
+
+❯ 아니 지금 업그레이드 방식 자체는 됐고, 업그레이드 Gauge 이미지에 대해 말하는  
+  거야.                                                                         
+
+⏺ 그렇군요. 게이지 이미지를 어떤 방식으로 표시하고 싶은 건가요? 예를 들면:
+
+  - 화면 하단 고정 HUD (Screen Space Canvas) — 존 진입 시 나타났다 사라짐
+  - 존 위에 뜨는 빌보드 — 항상 카메라를 향해 회전하는 WorldSpace Canvas
+  - 존 앞에 수직으로 세운 표지판 — 플레이어가 밟지 않는 위치
+
+  원하시는 방향이 있으신가요?
+
+✻ Brewed for 22s
+
+❯ 존 구역에 월드스페이스로 만들어놨으니, 이미지를 할당하면 그 이미지가 "        
+  업그레이드 존에 들어갔을 때, 돈이 부족하면 반응 x, 돈이 충분하면 게이지가 1초 
+                                                                                
+    동안(업그레이드 시간) 0->1로 Fill되도록. 1이 되면(다 채워지면)  업그레이드  
+                                                                                
+    완료" 역할을 하도록                                                         
+
+⏺ 현재 로직은 돈 확인 없이 게이지를 먼저 채우는 구조입니다. 돈 충분 여부를 먼저
+  체크하도록 UpgradeZone만 수정합니다.
+
+⏺ Update(Assets/Scripts/Zones/UpgradeZone.cs)
+  ⎿  Added 15 lines, removed 4 lines
+      31  
+      32          while (player != null)
+      33          {
+      34 -            if (UpgradeManager.Instance == null) { yield return
+         - new WaitForSeconds(0.5f); continue; }                         
+      34 +            if (UpgradeManager.Instance == null || GameManager.
+         +Instance == null)                                              
+      35 +            {                                                  
+      36 +                yield return new WaitForSeconds(0.5f);         
+      37 +                continue;                                      
+      38 +            }                                                  
+      39  
+      40 +            // 돈 부족하면 게이지 없이 대기                    
+      41 +            int cost = GetCurrentCost();                       
+      42 +            if (GameManager.Instance.Money < cost)             
+      43 +            {                                                  
+      44 +                yield return new WaitForSeconds(0.3f);         
+      45 +                continue;                                      
+      46 +            }                                                  
+      47 +                                                               
+      48 +            // 돈 충분: 게이지 0→1 채우기                      
+      49              float elapsed = 0f;
+      50              while (elapsed < holdTime && player != null)
+      51              {
+     ...
+      54                  yield return null;
+      55              }
+      56  
+      57 +            zoneUI?.SetGauge(0f);                              
+      58              if (player == null) break;
+      59  
+      46 -            zoneUI?.SetGauge(0f);                              
+      47 -                                                               
+      48 -            int cost = GetCurrentCost();                       
+      60              bool success = upgradeType switch
+      61              {
+      62                  UpgradeType.Tool       => UpgradeManager.Instan
+          ce.TryUpgradeTool(inventory),
+
+⏺ 완료. 이제 동작:
+
+  - 존 진입 → 돈 부족이면 게이지 반응 없음
+  - 돈 충분하면 게이지 0→1 Fill (1초)
+  - 가득 차면 업그레이드 완료, 게이지 초기화
+  - 존 이탈 시 게이지 즉시 0으로 리셋
+
+  에디터에서는 ZoneUI의 Gauge Image 필드에 Fill Image를 연결하면 됩니다.
+
+✻ Brewed for 17s
+
+※ recap: Prison Life idle game, deadline tomorrow. Upgrade gauge logic is complete — next step is connecting the Fill Image to ZoneUI's Gauge Image field in the Unity Editor.
+
+❯ fill image는 어떤거 넣으면 돼?                                                
+
+⏺ Unity UI의 기본 Image 컴포넌트를 그대로 쓰면 됩니다.
+
+  설정 방법:
+
+  1. WorldSpace Canvas 하위에 UI → Image 오브젝트 생성
+  2. Image 컴포넌트에서:
+    - Image Type → Filled
+    - Fill Method → Horizontal (또는 Radial 360 등 원하는 방향)
+    - Fill Amount → 0 (초기값)
+  3. Source Image는 원하는 스프라이트 아무거나 (단색이면 기본 UISprite도 OK)
+  4. 그 Image 오브젝트를 ZoneUI의 Gauge Image 필드에 드래그
+
+  코드가 fillAmount를 0→1로 조절하는 방식이라 Image 하나면 충분합니다.
+
+✻ Crunched for 7s
