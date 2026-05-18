@@ -1,13 +1,14 @@
 using UnityEngine;
+using UnityEngine.AI;
 using System.Collections;
 using System.Collections.Generic;
 
 public class WorkerNPC : MonoBehaviour
 {
     [Header("References")]
-    [SerializeField] MineZone mineZone;
+    [SerializeField] MineZone         mineZone;
     [SerializeField] ManufacturingZone manufacturingZone;
-    [SerializeField] Transform factoryWaypoint;
+    [SerializeField] Transform         factoryWaypoint;
 
     [Header("Tuning")]
     [SerializeField] int   carryCapacity   = 5;
@@ -17,11 +18,18 @@ public class WorkerNPC : MonoBehaviour
     [SerializeField] float carryBaseHeight = 1.5f;
     [SerializeField] float carrySpacing    = 0.2f;
 
+    NavMeshAgent agent;
     readonly List<GameObject> carryStack = new List<GameObject>();
+
+    void Awake()
+    {
+        agent = GetComponent<NavMeshAgent>();
+    }
 
     public void Activate()
     {
         gameObject.SetActive(true);
+        agent.speed = walkSpeed;
         StartCoroutine(WorkLoop());
     }
 
@@ -38,7 +46,7 @@ public class WorkerNPC : MonoBehaviour
 
     IEnumerator WorkLoop()
     {
-        yield return null; // StartCoroutine이 즉시 반환되도록 먼저 yield
+        yield return null;
 
         while (true)
         {
@@ -52,21 +60,20 @@ public class WorkerNPC : MonoBehaviour
             // ── 채굴 단계 ────────────────────────────────
             while (carryStack.Count < carryCapacity)
             {
-                // 가장 가까운 채굴 가능 광석 탐색
                 OreItem ore = mineZone.GetNearestOre(transform.position, float.MaxValue);
                 if (ore == null) { yield return new WaitForSeconds(1f); continue; }
 
-                // 광석 위치로 이동
+                ore.Reserve(); // 다른 워커가 같은 광석을 목표로 잡지 않도록 예약
+
                 yield return StartCoroutine(MoveTo(ore.transform.position));
 
-                // 이동하는 동안 다른 NPC가 먼저 채굴했을 수 있음
-                if (ore.IsMined) continue;
+                // 도착 전 리스폰·선점 됐을 경우
+                if (ore.IsMined) { ore.Unreserve(); continue; }
 
-                // 채굴
                 yield return new WaitForSeconds(mineInterval);
-                if (ore.IsMined) continue;
+                if (ore.IsMined) { ore.Unreserve(); continue; }
 
-                ore.Mine();
+                ore.Mine(); // Mine() 이후 리스폰 시 IsReserved 자동 초기화
                 GameObject vis = ItemVisualPool.Instance.GetOre(
                     transform.position + Vector3.up * 0.5f);
                 carryStack.Add(vis);
@@ -88,21 +95,11 @@ public class WorkerNPC : MonoBehaviour
 
     IEnumerator MoveTo(Vector3 target)
     {
-        while (true)
-        {
-            float dx = transform.position.x - target.x;
-            float dz = transform.position.z - target.z;
-            if (dx * dx + dz * dz <= 0.05f * 0.05f) break;
-
-            Vector3 xzTarget = new Vector3(target.x, transform.position.y, target.z);
-            Vector3 dir = xzTarget - transform.position;
-            if (dir.sqrMagnitude > 0.001f)
-                transform.rotation = Quaternion.Slerp(transform.rotation,
-                    Quaternion.LookRotation(dir.normalized), 10f * Time.deltaTime);
-
-            transform.position = Vector3.MoveTowards(
-                transform.position, xzTarget, walkSpeed * Time.deltaTime);
-            yield return null;
-        }
+        agent.SetDestination(target);
+        yield return null; // pathPending 갱신 대기
+        yield return new WaitUntil(() =>
+            !agent.pathPending &&
+            (agent.remainingDistance <= agent.stoppingDistance + 0.05f ||
+             agent.pathStatus == NavMeshPathStatus.PathInvalid));
     }
 }

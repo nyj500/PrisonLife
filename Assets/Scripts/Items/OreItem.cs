@@ -9,7 +9,11 @@ public class OreItem : MonoBehaviour
     Collider[] cols;
     Vector3 originPos;
 
-    public bool IsMined { get; private set; }
+    public bool IsMined      { get; private set; }
+    public bool IsReserved   { get; private set; }
+
+    public void Reserve()   => IsReserved = true;
+    public void Unreserve() => IsReserved = false;
 
     void Awake()
     {
@@ -38,5 +42,6 @@ public class OreItem : MonoBehaviour
         transform.position = originPos;
         SetVisible(true);
         IsMined = false;
+        IsReserved = false;
     }
 }

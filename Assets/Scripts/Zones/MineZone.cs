@@ -156,7 +156,7 @@ public class MineZone : BaseZone
         float minSqr = range * range;
         foreach (var ore in ores)
         {
-            if (ore == null || ore.IsMined) continue;
+            if (ore == null || ore.IsMined || ore.IsReserved) continue;
             float sq = XZSqrDist(fromPos, ore.transform.position);
             if (sq < minSqr) { minSqr = sq; nearest = ore; }
         }

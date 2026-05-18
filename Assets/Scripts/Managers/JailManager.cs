@@ -14,12 +14,14 @@ public class JailManager : MonoBehaviour
     [SerializeField] int   cols            = 6;
     [SerializeField] float spacingX        = 1.2f;
     [SerializeField] float spacingZ        = 1.2f;
+    [SerializeField] float blockGap        = 2f;   // 블록 간 추가 Z 간격
 
     [Header("Upgrade Visual")]
     [SerializeField] GameObject[] jailBlocks;           // 씬에 미리 배치(비활성화)된 감옥 증축 오브젝트 — 업그레이드 순서대로
     [SerializeField] GameObject[] wallsToDeactivate;    // 업그레이드 순서대로 비활성화할 벽
 
     int upgradeCount;
+    int blockCount;   // GenerateSlots 호출 횟수 (초기 포함) — blockGap 누적 계산용
 
     public const int MAX_UPGRADES    = 2;
     public bool      IsMaxUpgraded   => upgradeCount >= MAX_UPGRADES;
@@ -28,9 +30,6 @@ public class JailManager : MonoBehaviour
     readonly List<PrisonerNPC> prisoners        = new List<PrisonerNPC>();
     readonly Stack<int>        availableIndices = new Stack<int>();
 
-    // 한 명씩 순서대로 입장시키기 위한 큐
-    readonly Queue<(PrisonerNPC npc, Vector3[] path)> entryQueue = new Queue<(PrisonerNPC, Vector3[])>();
-    bool isProcessingEntry;
 
     public bool IsFull   => availableIndices.Count == 0;
     public int  Capacity => slots.Count;
@@ -55,22 +54,7 @@ public class JailManager : MonoBehaviour
             ? new[] { fromExitPos, jailEntrance.position, cell }
             : new[] { fromExitPos, cell };
 
-        entryQueue.Enqueue((npc, path));
-        if (!isProcessingEntry)
-            StartCoroutine(ProcessEntryQueue());
-    }
-
-    IEnumerator ProcessEntryQueue()
-    {
-        isProcessingEntry = true;
-        while (entryQueue.Count > 0)
-        {
-            var (npc, path) = entryQueue.Dequeue();
-            bool arrived = false;
-            npc.WalkPath(path, () => arrived = true);
-            yield return new WaitUntil(() => arrived);
-        }
-        isProcessingEntry = false;
+        npc.WalkPath(path);
     }
 
     public void UpgradeCapacity()
@@ -86,19 +70,24 @@ public class JailManager : MonoBehaviour
 
     void GenerateSlots(int count, bool animate)
     {
-        Vector3 origin = jailOrigin != null ? jailOrigin.position : transform.position;
-        int startIndex = slots.Count;
+        Vector3 origin         = jailOrigin != null ? jailOrigin.position : transform.position;
+        int     startIndex     = slots.Count;
+        int     globalRowOffset = startIndex / cols;   // 이전 블록들의 누적 행 수
+        float   blockZOffset   = blockCount * blockGap; // 블록 간 갭 누적
 
         Vector3 firstNew = origin, lastNew = origin;
         bool isFirst = true;
         for (int i = 0; i < count; i++)
         {
-            int idx = startIndex + i;
-            int col = idx % cols;
-            int row = idx / cols;
-            Vector3 pos = origin + new Vector3(col * spacingX, 0f, row * spacingZ);
+            int globalIdx = startIndex + i;
+            int col       = globalIdx % cols;
+            int localRow  = i / cols;                  // 이 블록 안에서의 행 번호
+            Vector3 pos = origin + new Vector3(
+                col * spacingX,
+                0f,
+                (globalRowOffset + localRow) * spacingZ + blockZOffset);
             slots.Add(pos);
-            availableIndices.Push(idx); // 오름차순 push → 높은 인덱스(마지막 슬롯)가 pop 우선
+            availableIndices.Push(globalIdx);
             if (isFirst) { firstNew = pos; isFirst = false; }
             lastNew = pos;
         }
@@ -112,6 +101,8 @@ public class JailManager : MonoBehaviour
                 StartCoroutine(PopIn(block.transform));
             }
         }
+
+        blockCount++;
     }
 
     IEnumerator PopIn(Transform t)

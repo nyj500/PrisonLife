@@ -41,17 +41,13 @@ public class PrisonerNPC : MonoBehaviour
     }
 
     // 여러 경유지를 순서대로 걸어간 뒤 마지막 지점에 멈춤 (ㄱ자 이동 등)
-    // onArrived: 마지막 경유지 도착 시 호출
-    public void WalkPath(Vector3[] waypoints, Action onArrived = null)
+    public void WalkPath(Vector3[] waypoints)
     {
         isWalking = false;
-        // 감옥 이동부터는 코루틴으로 위치 직접 제어 — Rigidbody 물리 비활성화
-        var rb = GetComponent<Rigidbody>();
-        if (rb != null) rb.isKinematic = true;
-        StartCoroutine(WalkPathRoutine(waypoints, onArrived));
+        StartCoroutine(WalkPathRoutine(waypoints));
     }
 
-    IEnumerator WalkPathRoutine(Vector3[] waypoints, Action onArrived)
+    IEnumerator WalkPathRoutine(Vector3[] waypoints)
     {
         const float sqThreshold = 0.1f * 0.1f;
         foreach (Vector3 wp in waypoints)
@@ -67,7 +63,6 @@ public class PrisonerNPC : MonoBehaviour
             }
             transform.position = new Vector3(wp.x, transform.position.y, wp.z);
         }
-        onArrived?.Invoke();
     }
 
     void Update()

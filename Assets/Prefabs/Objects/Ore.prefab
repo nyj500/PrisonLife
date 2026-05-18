@@ -118,4 +118,4 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 28addf3e5cb284d0fad1665d8a7e50f8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  respawnDelay: 5
+  respawnDelay: 7
